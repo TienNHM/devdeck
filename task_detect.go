@@ -140,7 +140,7 @@ func taskNode(dir string) []Task {
 	var out []Task
 	for _, k := range names {
 		body, _ := pkg.Scripts[k].(string)
-		out = append(out, Task{Name: k, Cmd: pm + " run " + k, Source: pm, Body: clip(body, 300)})
+		out = append(out, Task{Name: k, Cmd: pm + " run " + k, Source: pm, Body: procClip(body, 300)})
 	}
 	if len(out) > maxTasksPerSource-1 {
 		out = out[:maxTasksPerSource-1]

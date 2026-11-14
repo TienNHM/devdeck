@@ -48,7 +48,7 @@ var (
 	detailCache = map[int32]procDetail{}
 )
 
-func clip(s string, n int) string {
+func procClip(s string, n int) string {
 	if len(s) > n {
 		return s[:n] + "…"
 	}
@@ -65,10 +65,10 @@ func procDetails(pid int32, create int64) procDetail {
 	d = procDetail{Create: create, at: time.Now()}
 	if p, err := process.NewProcess(pid); err == nil {
 		if s, err := p.Cmdline(); err == nil {
-			d.Cmdline = clip(strings.TrimSpace(s), 4096)
+			d.Cmdline = procClip(strings.TrimSpace(s), 4096)
 		}
 		if s, err := p.Cwd(); err == nil { // fails (or is empty) for elevated processes on Windows
-			d.Cwd = clip(s, 1024)
+			d.Cwd = procClip(s, 1024)
 		}
 	}
 	detailMu.Lock()

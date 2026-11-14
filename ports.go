@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
 	"sort"
-	"strconv"
 	"syscall"
 
 	"github.com/shirou/gopsutil/v4/net"
@@ -124,24 +121,18 @@ func killProcess(pid int32, tree bool) error {
 	if pid <= 4 || int(pid) == os.Getpid() {
 		return errors.New("refusing to kill system process or devdeck itself")
 	}
-	if tree && runtime.GOOS == "windows" {
-		cmd := exec.Command("taskkill", "/PID", strconv.Itoa(int(pid)), "/T", "/F")
-		procHideWindow(cmd)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("taskkill: %v: %s", err, out)
-		}
-		return nil
-	}
 	p, err := process.NewProcess(pid)
 	if err != nil {
 		return err
 	}
 	if tree {
-		kids, _ := p.Children()
-		for _, k := range kids {
-			_ = k.Kill()
+		// Not `taskkill /T`: Windows keeps stale parent PIDs, so a reused PID can make unrelated
+		// processes look like children. killTree only follows children created after their parent.
+		killTree(pid)
+		if alive, _ := p.IsRunning(); alive {
+			return fmt.Errorf("process %d is still running (access denied?)", pid)
 		}
+		return nil
 	}
 	return p.Kill()
 }
