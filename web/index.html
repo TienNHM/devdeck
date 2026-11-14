@@ -146,11 +146,46 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
   <!-- ============ /db ============ -->
 
   <!-- ============ docker (owner: docker.js) ============ -->
-  <section id="docker"><div class="empty">Docker panel is coming soon.</div></section>
+  <section id="docker">
+    <div class="toolbar">
+      <div class="docker-seg" id="docker-seg">
+        <button data-view="containers" data-i18n="docker.containers">Containers</button>
+        <button data-view="images" data-i18n="docker.images">Images</button>
+        <button data-view="compose" data-i18n="docker.compose">Compose</button>
+      </div>
+      <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="docker-q" placeholder="Filter" data-i18n-ph="docker.filter" spellcheck="false" autocomplete="off"></label>
+      <label class="check" id="docker-allw"><input id="docker-all" type="checkbox"> <span data-i18n="docker.showAll">Show stopped</span></label>
+      <span class="sp"></span><span id="docker-info" class="muted"></span>
+      <button class="btn" id="docker-stats" data-i18n-title="docker.statsTitle" title="One-shot CPU / memory snapshot (docker stats --no-stream)"><span data-i18n="docker.stats">Stats</span></button>
+      <button class="btn" id="docker-r"><svg class="i"><use href="#i-refresh"/></svg><span data-i18n="docker.refresh">Refresh</span></button>
+    </div>
+    <div class="card scroll" id="docker-card"><div class="empty" data-i18n="docker.loading">Checking Docker…</div></div>
+    <div id="docker-empty" class="docker-empty" hidden></div>
+    <div id="docker-panel" class="card docker-panel" hidden>
+      <div class="card-head"><b id="docker-panel-t"></b><span class="sp"></span><span id="docker-panel-x"></span><button class="btn sm" id="docker-panel-close" data-i18n="docker.close">Close</button></div>
+      <div id="docker-panel-body" class="docker-panel-body"></div>
+    </div>
+  </section>
   <!-- ============ /docker ============ -->
 
   <!-- ============ logs (owner: logs.js) ============ -->
-  <section id="logs"><div class="empty">Log tailer is coming soon.</div></section>
+  <section id="logs">
+    <div class="toolbar">
+      <input id="logs-path" class="wide mono" placeholder="Log file path, e.g. C:\app\logs\app.log" data-i18n-ph="logs.path" spellcheck="false" autocomplete="off">
+      <button class="btn primary" id="logs-add"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="logs.add">Add file</span></button>
+    </div>
+    <div class="logs-layout">
+      <div class="card logs-side">
+        <div class="card-head"><b data-i18n="logs.files">Log files</b><span id="logs-count" class="muted"></span></div>
+        <div id="logs-list"></div>
+      </div>
+      <div class="card logs-main">
+        <div class="card-head"><b id="logs-title" class="mono"></b></div>
+        <div id="logs-pick" class="empty" data-i18n="logs.pick">Pick a log file on the left to view it.</div>
+        <div id="logs-view" hidden></div>
+      </div>
+    </div>
+  </section>
   <!-- ============ /logs ============ -->
 
   <!-- ============ term (owner: term.js) ============ -->
