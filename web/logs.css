@@ -1,1 +1,40 @@
-/* logs tab styles (feature module). */
+/* Logs tab + shared log viewer (.logs-v, also used by docker.js) */
+.logs-layout{flex:1;min-height:0;display:flex;gap:12px}
+.logs-side{width:300px;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+#logs-list{flex:1;overflow:auto;padding:4px 0}
+.logs-file{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;cursor:pointer;border-left:3px solid transparent}
+.logs-file:hover{background:var(--surface2)}
+.logs-file.on{background:var(--acc-soft);border-left-color:var(--acc)}
+.logs-fmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.logs-fmain b,.logs-fmain span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logs-fmain span{font-size:11px}
+.logs-fsize{font-size:11px;white-space:nowrap}
+.logs-ferr{color:var(--bad)}
+.logs-rm{padding:2px 5px;color:var(--mut)}
+.logs-rm:hover{color:var(--bad)}
+.logs-main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
+.logs-main .card-head b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+#logs-view{flex:1;min-height:0;display:flex;flex-direction:column}
+
+.logs-v{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px}
+.logs-bar .search input{min-width:200px}
+.logs-bar select{padding:5px 8px}
+.logs-q.logs-bad{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
+.logs-stat{font-size:12px;white-space:nowrap}
+.logs-stat.logs-live{color:var(--ok)}
+.logs-box{position:relative;flex:1;min-height:0;border:1px solid var(--line);border-radius:9px;background:var(--surface2);overflow:hidden}
+.logs-body{position:absolute;inset:0;overflow:auto;padding:6px 0;font-size:12px;line-height:1.55}
+.logs-ln,.logs-note{padding:0 12px 0 10px;white-space:pre;border-left:3px solid transparent;min-height:1.55em}
+.logs-body.logs-wrap .logs-ln,.logs-body.logs-wrap .logs-note{white-space:pre-wrap;word-break:break-all}
+.logs-ln:hover{background:var(--surface)}
+.logs-ln.logs-error{color:var(--bad);border-left-color:var(--bad);background:var(--bad-soft)}
+.logs-ln.logs-warn{color:var(--warn);border-left-color:var(--warn)}
+.logs-ln.logs-info{border-left-color:var(--acc-soft)}
+.logs-ln.logs-debug{color:var(--mut)}
+.logs-ln mark{background:var(--warn-soft);color:inherit;outline:1px solid var(--warn);border-radius:2px}
+.logs-note{color:var(--mut);font-style:italic;font-family:inherit;margin:2px 0}
+.logs-note:before{content:"— "}
+.logs-note-fail{color:var(--bad)}
+.logs-ph{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.logs-bottom{position:absolute;right:14px;bottom:12px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+@media (max-width:900px){.logs-layout{flex-direction:column}.logs-side{width:auto;max-height:30vh}}
