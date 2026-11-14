@@ -86,12 +86,13 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
   <!-- ============ ports (owner: ports.js) ============ -->
   <section id="ports">
     <div class="toolbar">
-      <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="ports-q" placeholder="Filter by port, process or PID"></label>
+      <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="ports-q" data-i18n-ph="ports.filter" placeholder="Filter by port, process, PID, type or folder"></label>
+      <label class="check"><input id="ports-group" type="checkbox"> <span data-i18n="ports.group">Group by process</span></label>
       <span class="sp"></span><span id="ports-count" class="muted"></span>
-      <button class="btn" id="ports-r"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+      <button class="btn" id="ports-r"><svg class="i"><use href="#i-refresh"/></svg><span data-i18n="ports.refresh">Refresh</span></button>
     </div>
     <div class="card scroll">
-      <table><thead><tr><th>Port</th><th>Address</th><th>Process</th><th>PID</th><th></th></tr></thead><tbody id="ports-t"></tbody></table>
+      <table class="pt-table"><thead><tr><th data-i18n="ports.col.port">Port</th><th data-i18n="ports.col.addr">Address</th><th data-i18n="ports.col.proc">Process</th><th>PID</th><th data-i18n="ports.col.started">Started</th><th data-i18n="ports.col.where">Folder / command</th><th></th></tr></thead><tbody id="ports-t"></tbody></table>
     </div>
   </section>
   <!-- ============ /ports ============ -->
@@ -99,18 +100,31 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
   <!-- ============ procs (owner: ports.js) ============ -->
   <section id="procs">
     <div class="toolbar">
-      <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="procs-q" placeholder="Filter by name or PID"></label>
+      <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="procs-q" data-i18n-ph="procs.filter" placeholder="Filter by name or PID"></label>
+      <div class="pr-seg" id="procs-mode"><button data-mode="flat" data-i18n="procs.flat">Flat</button><button data-mode="tree" data-i18n="procs.tree">Tree</button></div>
       <span class="sp"></span><span id="procs-count" class="muted"></span>
-      <button class="btn" id="procs-r"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+      <button class="btn" id="procs-r"><svg class="i"><use href="#i-refresh"/></svg><span data-i18n="procs.refresh">Refresh</span></button>
     </div>
-    <div class="card scroll">
-      <table><thead><tr><th>Name</th><th>PID</th><th>PPID</th><th>Memory</th><th></th></tr></thead><tbody id="procs-t"></tbody></table>
+    <div class="pr-wrap">
+      <div class="card scroll">
+        <table class="pr-table"><thead><tr><th data-sort="name" data-i18n="procs.col.name">Name</th><th data-sort="pid">PID</th><th>PPID</th><th data-sort="cpu">CPU</th><th data-sort="rss" data-i18n="procs.col.mem">Memory</th><th data-sort="started" data-i18n="procs.col.started">Started</th><th></th></tr></thead><tbody id="procs-t"></tbody></table>
+      </div>
+      <aside id="procs-drawer" class="card pr-drawer" hidden></aside>
     </div>
   </section>
   <!-- ============ /procs ============ -->
 
   <!-- ============ projects (owner: projects.js) ============ -->
-  <section id="projects"><div class="empty">Projects are coming soon.</div></section>
+  <section id="projects">
+    <div class="toolbar">
+      <input id="pj-path" class="wide" data-i18n-ph="projects.pathPh" placeholder="Project folder, e.g. D:\code\my-app" autocomplete="off" spellcheck="false">
+      <button class="btn primary" id="pj-add"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="projects.add">Add project</span></button>
+      <span class="sep"></span>
+      <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="pj-q" data-i18n-ph="projects.filter" placeholder="Filter projects or tasks"></label>
+      <button class="btn" id="pj-r"><svg class="i"><use href="#i-refresh"/></svg><span data-i18n="projects.refresh">Refresh</span></button>
+    </div>
+    <div id="pj-list" class="pj-list"></div>
+  </section>
   <!-- ============ /projects ============ -->
 
   <!-- ============ git (owner: git.js) ============ -->
