@@ -1,0 +1,54 @@
+:root{--bg:#fff;--fg:#1c1f24;--mut:#6a737d;--line:#e1e4e8;--acc:#0969da;--bad:#cf222e;--hov:#f3f4f6;--card:#f6f8fa}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#8b949e;--line:#30363d;--acc:#4493f8;--bad:#f85149;--hov:#161b22;--card:#161b22}}
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.45 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:16px;padding:6px 12px;border-bottom:1px solid var(--line)}
+.brand{letter-spacing:.5px}
+nav{display:flex;gap:2px;flex:1}
+nav button{background:none;border:0;color:var(--mut);padding:6px 10px;border-radius:6px;cursor:pointer;font:inherit}
+nav button.on{background:var(--hov);color:var(--fg);font-weight:600}
+main{flex:1;min-height:0;overflow:hidden;position:relative}
+section{display:none;height:100%;overflow:auto;padding:10px 12px}
+section.on{display:block}
+#term.on{display:flex;flex-direction:column;overflow:hidden}
+.muted{color:var(--mut)}
+.bar{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+input.wide{min-width:280px;flex:1}
+button{cursor:pointer}button:hover{background:var(--hov)}
+button.danger{color:var(--bad)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:3px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:500;position:sticky;top:0;background:var(--bg)}
+td.r,th.r{text-align:right}
+tbody tr:hover{background:var(--hov)}
+code,pre{font:12px/1.4 ui-monospace,Consolas,monospace}
+pre{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0}
+.badge{display:inline-block;padding:0 8px;border-radius:10px;font-size:11px;color:#fff}
+.badge.idle{background:#6a737d}.badge.working{background:#1a7f37}.badge.waiting{background:#bf8700}
+/* git */
+#git-wrap{display:flex;gap:10px;align-items:flex-start}
+#git-graph{flex:1;position:relative;min-width:0}
+#git-side{width:45%;position:sticky;top:0;flex-shrink:0}
+#git-side button{margin-bottom:6px}
+#git-detail{max-height:calc(100vh - 150px)}
+.grow{display:flex;align-items:center;height:24px;cursor:pointer;white-space:nowrap}
+.grow:hover{background:var(--hov)}
+.grow .m{overflow:hidden;text-overflow:ellipsis}
+.ref{font-size:11px;padding:0 6px;margin-right:4px;border-radius:9px;border:1px solid var(--acc);color:var(--acc)}
+.ref.tag{border-color:#bf8700;color:#bf8700}.ref.head{background:var(--acc);color:#fff}
+.hash{color:var(--mut);font-family:ui-monospace,Consolas,monospace;margin:0 8px}
+/* redis */
+#r-body{display:flex;gap:10px;height:calc(100% - 44px)}
+#r-left{width:36%;display:flex;flex-direction:column;min-width:0}
+#r-keys{flex:1;overflow:auto;border:1px solid var(--line);border-radius:6px}
+#r-right{flex:1;overflow:auto;min-width:0}
+.rk{padding:2px 8px;cursor:pointer;display:flex;gap:8px;justify-content:space-between}
+.rk:hover,.rk.on{background:var(--hov)}
+.rk .t{color:var(--mut);font-size:11px}
+/* terminal */
+#t-area{flex:1;min-height:0;position:relative}
+.tpane{position:absolute;inset:0;display:none;background:#0d1117;padding:4px;border-radius:6px}
+.tpane.on{display:block}
+.ttab{display:inline-flex;gap:6px;align-items:center;padding:2px 8px;border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.ttab.on{background:var(--hov);font-weight:600}

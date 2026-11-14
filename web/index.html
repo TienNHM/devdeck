@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>devdeck</title>
+<link rel="stylesheet" href="vendor/xterm.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <b class="brand">devdeck</b>
+  <nav id="tabs">
+    <button data-tab="ports" class="on">Ports</button>
+    <button data-tab="procs">Processes</button>
+    <button data-tab="git">Git</button>
+    <button data-tab="redis">Redis</button>
+    <button data-tab="term">Terminal</button>
+    <button data-tab="claude">Claude</button>
+  </nav>
+  <span id="self" class="muted"></span>
+</header>
+<main>
+  <section id="ports" class="on">
+    <div class="bar"><input id="ports-q" placeholder="filter port / process"><button id="ports-r">Refresh</button></div>
+    <table><thead><tr><th>Port</th><th>Address</th><th>PID</th><th>Process</th><th></th></tr></thead><tbody id="ports-t"></tbody></table>
+  </section>
+  <section id="procs">
+    <div class="bar"><input id="procs-q" placeholder="filter name / pid"><button id="procs-r">Refresh</button></div>
+    <table><thead><tr><th>PID</th><th>PPID</th><th>Name</th><th class="r">Memory</th><th></th></tr></thead><tbody id="procs-t"></tbody></table>
+  </section>
+  <section id="git">
+    <div class="bar"><input id="git-repo" class="wide" placeholder="repository path, e.g. D:\\projects\\app"><button id="git-go">Load</button>
+      <span id="git-info" class="muted"></span></div>
+    <div id="git-wrap"><div id="git-graph"></div><div id="git-side" hidden><button id="git-patch">Show patch</button><pre id="git-detail"></pre></div></div>
+  </section>
+  <section id="redis">
+    <div class="bar">
+      <input id="r-addr" value="127.0.0.1:6379" placeholder="host:port"><input id="r-db" type="number" value="0" min="0" style="width:4em" title="db">
+      <input id="r-pass" type="password" placeholder="password (kept in memory only)"><label><input id="r-tls" type="checkbox"> TLS</label>
+      <button id="r-connect">Connect</button><span id="r-info" class="muted"></span>
+    </div>
+    <div id="r-body" hidden>
+      <div id="r-left"><div class="bar"><input id="r-match" value="*" placeholder="match pattern"><button id="r-scan">Scan</button></div>
+        <div id="r-keys"></div><button id="r-more" hidden>Load more</button></div>
+      <div id="r-right"><pre id="r-val">Select a key</pre></div>
+    </div>
+  </section>
+  <section id="term">
+    <div class="bar">
+      <button id="t-local">+ Local shell</button>
+      <button id="t-claude">+ Local claude</button>
+      <input id="t-cwd" class="wide" placeholder="working directory (optional)">
+      <select id="t-host"></select>
+      <button id="t-ssh">+ SSH</button>
+      <button id="t-sshclaude">+ SSH claude</button>
+      <button id="t-hosts">Hosts…</button>
+    </div>
+    <div id="hosts-edit" hidden>
+      <div class="bar"><input id="h-name" placeholder="name"><input id="h-host" placeholder="host"><input id="h-port" placeholder="22" style="width:4em">
+        <input id="h-user" placeholder="user"><input id="h-key" class="wide" placeholder="private key path (optional)"><button id="h-save">Save host</button></div>
+      <div id="h-list" class="muted"></div>
+    </div>
+    <div id="t-tabs" class="bar"></div>
+    <div id="t-area"></div>
+  </section>
+  <section id="claude">
+    <p class="muted">Live Claude Code sessions reported by hooks. Run <code>devdeck hooks-config</code> for setup.</p>
+    <table><thead><tr><th>State</th><th>Directory</th><th>Last event</th><th>Detail</th><th>Updated</th><th></th></tr></thead><tbody id="c-t"></tbody></table>
+  </section>
+</main>
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
