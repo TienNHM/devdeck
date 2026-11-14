@@ -14,28 +14,41 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
+// PortInfo is one listening TCP socket and its owner. The fields after Process are best effort:
+// they stay empty when the OS denies access (elevated or other users' processes).
 type PortInfo struct {
 	Port    uint32 `json:"port"`
 	Addr    string `json:"addr"`
 	PID     int32  `json:"pid"`
 	Process string `json:"process"`
+	PPID    int32  `json:"ppid,omitempty"`
+	Cmdline string `json:"cmdline,omitempty"`
+	Cwd     string `json:"cwd,omitempty"`
+	Started int64  `json:"started,omitempty"` // unix ms
+	Kind    string `json:"kind,omitempty"`    // recognised dev server / service, e.g. "Vite"
+	KindCat string `json:"kindCat,omitempty"` // web | runtime | db | infra
 }
 
 type ProcInfo struct {
-	PID  int32  `json:"pid"`
-	PPID int32  `json:"ppid"`
-	Name string `json:"name"`
-	RSS  uint64 `json:"rss"`
+	PID     int32   `json:"pid"`
+	PPID    int32   `json:"ppid"`
+	Name    string  `json:"name"`
+	RSS     uint64  `json:"rss"`
+	CPU     float64 `json:"cpu"`               // percent of the whole machine; -1 = not sampled yet
+	Started int64   `json:"started,omitempty"` // unix ms
+	Threads int32   `json:"threads,omitempty"`
 }
 
+// listPorts returns listening TCP sockets with owner details. One process snapshot per call;
+// command line and working directory come from a small per-process cache (see procDetails).
 func listPorts() ([]PortInfo, error) {
 	conns, err := net.Connections("tcp")
 	if err != nil {
 		return nil, err
 	}
-	names := map[int32]string{}
 	seen := map[string]bool{}
-	var out []PortInfo
+	var listen []net.ConnectionStat
+	var pids []int32
 	for _, c := range conns {
 		if c.Type != syscall.SOCK_STREAM || c.Status != "LISTEN" {
 			continue
@@ -45,39 +58,66 @@ func listPorts() ([]PortInfo, error) {
 			continue
 		}
 		seen[key] = true
-		name, ok := names[c.Pid]
-		if !ok {
-			if p, err := process.NewProcess(c.Pid); err == nil {
-				name, _ = p.Name()
-			}
-			names[c.Pid] = name
-		}
-		out = append(out, PortInfo{Port: c.Laddr.Port, Addr: c.Laddr.IP, PID: c.Pid, Process: name})
+		listen = append(listen, c)
+		pids = append(pids, c.Pid)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Port < out[j].Port })
+	snap, full, snapErr := procRowsFor(pids)
+	var out []PortInfo
+	for _, c := range listen {
+		pi := PortInfo{Port: c.Laddr.Port, Addr: c.Laddr.IP, PID: c.Pid}
+		row, ok := snap[c.Pid]
+		if ok {
+			pi.Process, pi.PPID, pi.Started = row.Name, row.PPID, row.Create
+		} else if snapErr != nil {
+			if p, err := process.NewProcess(c.Pid); err == nil {
+				pi.Process, _ = p.Name()
+			}
+		}
+		if c.Pid > 4 {
+			d := procDetails(c.Pid, pi.Started)
+			pi.Cmdline, pi.Cwd = d.Cmdline, d.Cwd
+		}
+		pi.Kind, pi.KindCat = devKind(pi.Process, pi.Cmdline)
+		out = append(out, pi)
+	}
+	if snapErr == nil && full {
+		pruneDetails(snap)
+	} else {
+		pruneExpiredDetails()
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Port != out[j].Port {
+			return out[i].Port < out[j].Port
+		}
+		return out[i].Addr < out[j].Addr
+	})
 	return out, nil
 }
 
+// listProcesses returns every process sorted by memory, without CPU sampling (CPU is -1).
 func listProcesses(limit int) ([]ProcInfo, error) {
-	ps, err := process.Processes()
+	snap, err := procSnapshot(false)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ProcInfo, 0, len(ps))
-	for _, p := range ps {
-		name, _ := p.Name()
-		ppid, _ := p.Ppid()
-		var rss uint64
-		if mi, err := p.MemoryInfo(); err == nil && mi != nil {
-			rss = mi.RSS
-		}
-		out = append(out, ProcInfo{PID: p.Pid, PPID: ppid, Name: name, RSS: rss})
+	out := make([]ProcInfo, 0, len(snap))
+	for _, r := range snap {
+		out = append(out, ProcInfo{PID: r.PID, PPID: r.PPID, Name: r.Name, RSS: r.RSS, CPU: -1, Started: r.Create, Threads: r.Threads})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].RSS > out[j].RSS })
+	sortProcs(out)
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func sortProcs(out []ProcInfo) {
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].RSS != out[j].RSS {
+			return out[i].RSS > out[j].RSS
+		}
+		return out[i].PID < out[j].PID
+	})
 }
 
 func killProcess(pid int32, tree bool) error {
@@ -85,7 +125,9 @@ func killProcess(pid int32, tree bool) error {
 		return errors.New("refusing to kill system process or devdeck itself")
 	}
 	if tree && runtime.GOOS == "windows" {
-		out, err := exec.Command("taskkill", "/PID", strconv.Itoa(int(pid)), "/T", "/F").CombinedOutput()
+		cmd := exec.Command("taskkill", "/PID", strconv.Itoa(int(pid)), "/T", "/F")
+		procHideWindow(cmd)
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("taskkill: %v: %s", err, out)
 		}

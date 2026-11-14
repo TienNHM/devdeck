@@ -1,1 +1,48 @@
-/* projects tab styles (feature module). */
+/* projects tab (feature module: projects.js). Classes are prefixed pj-. */
+.pj-list{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:12px;align-content:start;padding-bottom:4px}
+.pj-empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:56px 16px;text-align:center;background:var(--surface);border:1px dashed var(--line);border-radius:var(--r)}
+.pj-empty .i{width:34px;height:34px;color:var(--acc);stroke-width:1.4}
+.pj-empty h3{margin:4px 0 0;font-size:15px}
+.pj-empty p{margin:0;max-width:520px}
+
+.pj-card{display:flex;flex-direction:column;min-width:0}
+.pj-card.pj-missing{opacity:.7}
+.pj-card.pj-flash{animation:pj-flash 1.2s ease-out}
+@keyframes pj-flash{0%{box-shadow:0 0 0 3px var(--acc)}100%{box-shadow:var(--shadow)}}
+.pj-head{display:flex;align-items:flex-start;gap:10px;padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.pj-title{flex:1;min-width:0}
+.pj-name{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.pj-name b{font-size:14px}
+.pj-git{display:inline-flex;gap:4px;flex-wrap:wrap}
+.pj-chip{display:inline-flex;align-items:center;gap:4px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:600;line-height:18px;background:var(--surface2);border:1px solid var(--line);color:var(--fg);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-chip .i{width:12px;height:12px}
+.pj-chip.pj-dirty{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pj-chip.pj-clean{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.pj-path{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.pj-actions{display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.pj-actions .btn[disabled]{opacity:.45;cursor:not-allowed}
+.pj-rm{color:var(--mut);padding:2px 6px}
+.pj-rm:hover{color:var(--bad);background:var(--bad-soft)}
+
+.pj-body{padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.pj-group{display:flex;align-items:flex-start;gap:8px}
+.pj-src{flex-shrink:0;width:62px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--mut);padding-top:3px}
+.pj-tasks{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.pj-task{box-shadow:none;max-width:100%}
+.pj-task .i{width:11px;height:11px;color:var(--acc)}
+.pj-task.pj-live{border-color:var(--ok);background:var(--ok-soft)}
+.pj-task.pj-live .i{color:var(--ok)}
+.pj-live-port{font-weight:700;color:var(--ok)}
+.pj-live-port:empty{display:none}
+.pj-none,.pj-warn{font-size:12px}
+.pj-warn{color:var(--warn)}
+
+.pj-ports{border-top:1px solid var(--line);padding:8px 14px 10px;display:flex;flex-direction:column;gap:4px}
+.pj-ports-h{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--mut)}
+.pj-port{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+.pj-port .port{min-width:52px}
+.pj-pproc{display:inline-flex;align-items:center;min-width:0;white-space:nowrap}
+.pj-port a.pid{color:var(--mut);white-space:nowrap}
+.pj-port a.pid:hover{color:var(--acc)}
+
+@media (max-width:900px){.pj-list{grid-template-columns:1fr}.pj-head{flex-direction:column}.pj-actions{justify-content:flex-start}}
