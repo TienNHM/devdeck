@@ -1,0 +1,6 @@
+devdeck.exe
+*.exe
+dist/
+.env
+*.log
+
