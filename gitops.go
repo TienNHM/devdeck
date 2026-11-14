@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -134,6 +135,7 @@ func init() {
 		"remote.prune":           actRemotePrune,
 		"op.abort":               func(r string, a aargs) (string, error) { return opControl(r, a, "--abort") },
 		"op.continue":            func(r string, a aargs) (string, error) { return opControl(r, a, "--continue") },
+		"commit":                 actCommit,
 	}
 }
 
@@ -691,4 +693,49 @@ func opControl(repo string, a aargs, flag string) (string, error) {
 		return run(repo, tShort, op, flag)
 	}
 	return "", errors.New("unknown operation")
+}
+
+// ------------------------------------------------------------ commit
+
+// actCommit commits the index (optionally staging everything first, optionally amending HEAD).
+// The message goes to git on stdin (`-F -`) and is never placed in the argument list.
+func actCommit(repo string, a aargs) (string, error) {
+	msg := strings.ReplaceAll(a.raw("message"), "\r\n", "\n")
+	if strings.ContainsRune(msg, 0) || len(msg) > 20000 {
+		return "", errors.New("invalid commit message")
+	}
+	amend := a.b("amend")
+	if strings.TrimSpace(msg) == "" && !amend {
+		return "", errors.New("a commit message is required")
+	}
+	var all []string
+	if a.b("all") {
+		o, err := run(repo, tShort, "add", "-A", "--", ".")
+		all = append(all, o)
+		if err != nil {
+			return strings.TrimSpace(strings.Join(all, "\n")), err
+		}
+	}
+	args := []string{"commit"}
+	if amend {
+		args = append(args, "--amend")
+	}
+	var stdin io.Reader
+	if strings.TrimSpace(msg) == "" {
+		args = append(args, "--no-edit") // amend keeping the previous message
+	} else {
+		args = append(args, "-F", "-")
+		stdin = strings.NewReader(msg)
+	}
+	out, se, err := runGit(repo, tShort, 2<<20, stdin, args...)
+	comb := strings.TrimSpace(strings.TrimSpace(string(out)) + "\n" + se)
+	all = append(all, comb)
+	res := strings.TrimSpace(strings.Join(all, "\n"))
+	if err != nil {
+		if res == "" {
+			res = err.Error()
+		}
+		return res, errors.New(res)
+	}
+	return res, nil
 }

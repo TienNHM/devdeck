@@ -8,18 +8,29 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
 
 type ClaudeSession struct {
+	ID         string `json:"id"`
+	Cwd        string `json:"cwd"`
+	State      string `json:"state"` // idle | working | waiting
+	Event      string `json:"event"`
+	Message    string `json:"message,omitempty"`
+	Tool       string `json:"tool,omitempty"`
+	Updated    int64  `json:"updated"`
+	Started    int64  `json:"started,omitempty"`    // first hook seen by devdeck (unix seconds)
+	Transcript string `json:"transcript,omitempty"` // transcript_path from the hook payload
+}
+
+// ClaudeAlert is pushed to the browser when a session needs attention.
+type ClaudeAlert struct {
 	ID      string `json:"id"`
+	Kind    string `json:"kind"` // waiting | done
 	Cwd     string `json:"cwd"`
-	State   string `json:"state"` // idle | working | waiting
-	Event   string `json:"event"`
 	Message string `json:"message,omitempty"`
-	Tool    string `json:"tool,omitempty"`
-	Updated int64  `json:"updated"`
 }
 
 var claudeSessions = struct {
@@ -30,41 +41,78 @@ var claudeSessions = struct {
 func recordClaudeEvent(p map[string]any) {
 	str := func(k string) string { s, _ := p[k].(string); return s }
 	id, event := str("session_id"), str("hook_event_name")
-	if id == "" || event == "" {
+	if id == "" || event == "" || len(id) > 200 {
 		return
 	}
+	var alert *ClaudeAlert
 	claudeSessions.Lock()
-	defer claudeSessions.Unlock()
 	if event == "SessionEnd" {
 		delete(claudeSessions.m, id)
-		return
-	}
-	s := claudeSessions.m[id]
-	if s == nil {
-		s = &ClaudeSession{ID: id}
-		claudeSessions.m[id] = s
-	}
-	if cwd := str("cwd"); cwd != "" {
-		s.Cwd = cwd
-	}
-	s.Event, s.Updated = event, time.Now().Unix()
-	switch event {
-	case "SessionStart", "Stop":
-		s.State, s.Message, s.Tool = "idle", "", ""
-	case "UserPromptSubmit", "PreToolUse", "PostToolUse":
-		s.State, s.Message = "working", ""
-		if t := str("tool_name"); t != "" {
-			s.Tool = t
+	} else {
+		now := time.Now().Unix()
+		s := claudeSessions.m[id]
+		if s == nil {
+			s = &ClaudeSession{ID: id, Started: now}
+			claudeSessions.m[id] = s
 		}
-	case "Notification":
-		s.State, s.Message = "waiting", str("message")
-	}
-	cutoff := time.Now().Add(-12 * time.Hour).Unix()
-	for k, v := range claudeSessions.m {
-		if v.Updated < cutoff {
-			delete(claudeSessions.m, k)
+		if cwd := str("cwd"); cwd != "" {
+			s.Cwd = cwd
+		}
+		if tp := str("transcript_path"); tp != "" && len(tp) < 4096 {
+			s.Transcript = tp
+		}
+		prev := s.State
+		s.Event, s.Updated = event, now
+		switch event {
+		case "SessionStart", "Stop":
+			s.State, s.Message, s.Tool = "idle", "", ""
+		case "UserPromptSubmit", "PreToolUse", "PostToolUse":
+			s.State, s.Message = "working", ""
+			if t := str("tool_name"); t != "" {
+				s.Tool = t
+			}
+		case "Notification":
+			s.State, s.Message = "waiting", str("message")
+		}
+		// Alert only on real transitions: a permission/input prompt while working, or a finished turn.
+		// The "waiting for your input" reminder Claude sends after a finished turn is not alerted twice.
+		switch {
+		case s.State == "waiting" && prev != "waiting" && prev != "idle":
+			alert = &ClaudeAlert{ID: id, Kind: "waiting", Cwd: s.Cwd, Message: s.Message}
+		case event == "Stop" && (prev == "working" || prev == "waiting"):
+			alert = &ClaudeAlert{ID: id, Kind: "done", Cwd: s.Cwd}
+		}
+		cutoff := time.Now().Add(-12 * time.Hour).Unix()
+		for k, v := range claudeSessions.m {
+			if v.Updated < cutoff {
+				delete(claudeSessions.m, k)
+			}
 		}
 	}
+	claudeSessions.Unlock()
+	claudeHub.publish(alert)
+}
+
+// dismissClaudeSession removes a session from the list (it reappears on its next hook event).
+func dismissClaudeSession(id string) bool {
+	claudeSessions.Lock()
+	_, ok := claudeSessions.m[id]
+	delete(claudeSessions.m, id)
+	claudeSessions.Unlock()
+	if ok {
+		claudeHub.publish(nil)
+	}
+	return ok
+}
+
+func getClaudeSession(id string) (ClaudeSession, bool) {
+	claudeSessions.Lock()
+	defer claudeSessions.Unlock()
+	s, ok := claudeSessions.m[id]
+	if !ok {
+		return ClaudeSession{}, false
+	}
+	return *s, true
 }
 
 func listClaudeSessions() []ClaudeSession {
@@ -95,6 +143,7 @@ func runHook(args []string) {
 	}
 	delete(p, "tool_input") // keep payloads small; may contain secrets
 	delete(p, "tool_response")
+	delete(p, "prompt")
 	body, _ := json.Marshal(p)
 	req, err := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d/api/hook", port), bytes.NewReader(body))
 	if err != nil {
@@ -108,7 +157,8 @@ func runHook(args []string) {
 	}
 }
 
-func printHooksConfig() {
+// hooksConfigText is the text printed by `devdeck hooks-config` (also shown in the Claude tab).
+func hooksConfigText() string {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = "devdeck"
@@ -121,8 +171,13 @@ func printHooksConfig() {
 		hooks[ev] = entry()
 	}
 	b, _ := json.MarshalIndent(map[string]any{"hooks": hooks}, "", "  ")
-	fmt.Println("# 1) Register the MCP server with Claude Code:")
-	fmt.Printf("claude mcp add devdeck -- \"%s\" mcp\n\n", exe)
-	fmt.Println("# 2) Merge this into ~/.claude/settings.json to show live session status in the dashboard:")
-	fmt.Println(string(b))
+	var sb strings.Builder
+	sb.WriteString("# 1) Register the MCP server with Claude Code:\n")
+	fmt.Fprintf(&sb, "claude mcp add devdeck -- \"%s\" mcp\n\n", exe)
+	sb.WriteString("# 2) Merge this into ~/.claude/settings.json to show live session status in the dashboard:\n")
+	sb.Write(b)
+	sb.WriteString("\n")
+	return sb.String()
 }
+
+func printHooksConfig() { fmt.Print(hooksConfigText()) }

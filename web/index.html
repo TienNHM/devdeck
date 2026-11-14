@@ -319,10 +319,16 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
 
   <!-- ============ claude (owner: claude.js) ============ -->
   <section id="claude">
-    <div class="toolbar"><span class="muted">Live Claude Code sessions reported by hooks. Run <code>devdeck hooks-config</code> for setup.</span></div>
-    <div class="card scroll">
-      <table><thead><tr><th>State</th><th>Directory</th><th>Last event</th><th>Detail</th><th>Updated</th><th></th></tr></thead><tbody id="c-t"></tbody></table>
+    <div class="toolbar">
+      <span id="claude-hooks" class="pill" hidden></span>
+      <span id="claude-live" class="claude-live muted"></span>
+      <span class="sp"></span>
+      <button class="btn" id="claude-new"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="claude.new">New session…</span></button>
+      <button class="btn primary" id="claude-ask"><svg class="i"><use href="#i-claude"/></svg><span data-i18n="claude.ask">Ask Claude…</span></button>
+      <button class="btn" id="claude-setup-btn" data-i18n="claude.setup">Setup</button>
     </div>
+    <div id="claude-setup" class="card claude-setup" hidden></div>
+    <div id="claude-list" class="claude-list"><div class="empty">Loading sessions…</div></div>
   </section>
   <!-- ============ /claude ============ -->
 </main>

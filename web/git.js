@@ -634,7 +634,7 @@ function renderDetails() {
     head = `<div class="gg-dtitle">Comparing commits</div><div class="gg-dmeta"><span>From</span><span>${lab(m.from)}</span><span>To</span><span>${lab(m.to)}</span></div>`;
   }
   const canReview = m.type !== 'unc' && m.to !== 'WORKTREE';
-  el.det.innerHTML = `<div class="gg-dh">${head}<div class="gg-dact"><button class="btn sm" data-act="dock" title="Move panel">${P.dock === 'bottom' ? 'Dock right' : 'Dock bottom'}</button><button class="btn sm" data-act="close" title="Close (Esc)">&times;</button></div></div>
+  el.det.innerHTML = `<div class="gg-dh">${head}<div class="gg-dact">${claudeDetBtns(m)}<button class="btn sm" data-act="dock" title="Move panel">${P.dock === 'bottom' ? 'Dock right' : 'Dock bottom'}</button><button class="btn sm" data-act="close" title="Close (Esc)">&times;</button></div></div>
     <div class="gg-ftool"><b>${m.files.length} file${m.files.length === 1 ? '' : 's'}</b> <span class="a">+${adds}</span> <span class="d">&minus;${dels}</span>
       <span class="sp"></span>
       <label class="check ${P.fileView === 'tree' ? '' : 'hid'}"><input type="checkbox" data-act="compact" ${P.compact ? 'checked' : ''}> compact folders</label>
@@ -653,6 +653,8 @@ el.det.addEventListener('click', e => {
     else if (a === 'view') { P.fileView = act.dataset.v; savePrefs(); renderDetails(); }
     else if (a === 'compact') { P.compact = act.checked; savePrefs(); renderDetails(); }
     else if (a === 'copy') { e.preventDefault(); copyText(act.dataset.v, 'Hash'); }
+    else if (a === 'claude-explain' && S.model && S.model.d) CA.explain(S.model.d.hash);
+    else if (a === 'claude-commit') CA.commit();
     else if (a === 'review') {
       const all = reviews(), k = reviewKey(S.model);
       if (all[k]) delete all[k]; else all[k] = { t: Date.now(), files: {} };
@@ -997,6 +999,84 @@ const A = {
   },
 };
 
+// ------------------------------------------------------------------ Claude (askClaude / claudeStream are globals from claude.js)
+const claudeReady = fn => { if (typeof window[fn] === 'function') return true; toast('Claude integration is not loaded', 'err'); return false; };
+const gitCtx = params => api(`/api/claude/gitctx?repo=${enc(S.repo)}&${params}`).then(r => r.text);
+const claudeLang = () => (typeof LANG !== 'undefined' && LANG === 'vi' ? ' Answer in Vietnamese.' : '');
+const cleanCommitMsg = s => String(s || '').replace(/^\s*(```|~~~)[\w-]*\n?/, '').replace(/\n?(```|~~~)\s*$/, '').trim();
+function claudeDetBtns(m) {
+  if (m.type === 'commit') return '<button class="btn sm" data-act="claude-explain" title="Ask Claude to explain this commit">Explain with Claude</button>';
+  if (m.type === 'unc') return '<button class="btn sm primary" data-act="claude-commit" title="Commit these changes">Commit…</button>';
+  return '';
+}
+const CA = {
+  explain: hash => {
+    if (!claudeReady('askClaude')) return;
+    askClaude({
+      title: `Explain commit ${short(hash)}`, cwd: S.repo,
+      prompt: 'Explain this git commit for a reviewer: what changed, why it was likely changed, and anything risky or worth testing. Be concise; use short bullet points.' + claudeLang(),
+      context: () => gitCtx(`kind=commit&hash=${enc(hash)}`),
+    });
+  },
+  prDesc: async branch => {
+    if (!claudeReady('askClaude')) return;
+    const names = (S.refs.branches || []).map(b => b.name), plain = splitRemote(branch).name;
+    const def = names.includes('main') ? 'main' : names.includes('master') ? 'master' : names.find(n => n !== branch && n !== plain) || 'main';
+    const v = await form({ title: `Write a pull request description for <b>${esc(branch)}</b>`, ok: 'Write with Claude', fields: [
+      { key: 'base', label: 'Target (base) branch', value: def, required: true, validate: x => /\s/.test(x.trim()) ? 'Branch names cannot contain spaces' : null }] });
+    if (!v) return;
+    const baseB = v.base.trim();
+    askClaude({
+      title: `PR description: ${branch} → ${baseB}`, cwd: S.repo,
+      prompt: 'Write a pull request description in Markdown for these changes: a one-line title, a short summary, a bullet list of the main changes, and a "How to test" section. Do not invent details that are not in the diff.' + claudeLang(),
+      context: () => gitCtx(`kind=branch&branch=${enc(branch)}&base=${enc(baseB)}`),
+    });
+  },
+  commit: async () => {
+    if (!S.refs) return;
+    const pending = form({ title: `Commit to ${curLabel()}`, ok: 'Commit', wide: true, fields: [
+      { key: 'message', label: 'Message', type: 'textarea', rows: 7, placeholder: 'Subject line\n\nOptional body', validate: (x, v) => x.trim() || v.amend ? null : 'A commit message is required' },
+      { key: 'all', label: 'Stage all changes first (<code>git add -A</code>)', type: 'checkbox', value: true },
+      { key: 'amend', label: 'Amend the last commit (<code>--amend</code>)', type: 'checkbox', value: false, hint: 'An empty message keeps the previous one.' },
+    ] });
+    const m = modals[modals.length - 1], f = q('form', m.box), ta = q('textarea[name=message]', f);
+    const gen = document.createElement('button');
+    gen.type = 'button'; gen.className = 'btn sm claude-gen'; gen.textContent = 'Generate with Claude';
+    gen.title = 'Write the message from the diff with Claude (runs claude -p)';
+    q('[data-k=message]', f).after(gen);
+    let ctrl = null;
+    gen.onclick = async () => {
+      if (ctrl) { ctrl.abort(); return; }
+      if (!claudeReady('claudeStream')) return;
+      ctrl = new AbortController();
+      const prev = ta.value;
+      gen.textContent = 'Stop'; ta.readOnly = true; ta.value = '';
+      try {
+        const ctx = await gitCtx(`kind=uncommitted${q('[name=all]', f).checked ? '' : '&staged=1'}`);
+        const text = await claudeStream({
+          prompt: 'Write a git commit message for the changes below. First line: imperative summary, at most 72 characters. Then a blank line and a short body only if it adds useful context. Output only the commit message, with no code fences or commentary.',
+          context: ctx, cwd: S.repo, signal: ctrl.signal, onText: x => { ta.value = cleanCommitMsg(x); },
+        });
+        ta.value = cleanCommitMsg(text);
+      } catch (e) {
+        if (e.name !== 'AbortError') toast(e.message, 'err');
+        if (!ta.value.trim()) ta.value = prev;
+      } finally {
+        ctrl = null; gen.textContent = 'Generate with Claude'; ta.readOnly = false;
+        if (f.isConnected) ta.focus();
+      }
+    };
+    const amend = q('[name=amend]', f);
+    amend.addEventListener('change', async () => {
+      if (!amend.checked || ta.value.trim() || !S.refs.headHash) return;
+      try { const d = await api(`/api/git/details?repo=${enc(S.repo)}&hash=${S.refs.headHash}`); if (!ta.value.trim()) ta.value = d.subject + (d.body ? '\n\n' + d.body : ''); } catch { /* keep empty */ }
+    });
+    const v = await pending;
+    if (ctrl) ctrl.abort();
+    if (v) act('commit', { message: v.message, all: v.all, amend: v.amend }, v.amend ? 'Commit amended' : 'Committed');
+  },
+};
+
 function webBase(u) {
   u = (u || '').trim(); let m;
   try { if (/^https?:\/\//i.test(u)) { const x = new URL(u); return { host: x.hostname, web: `${x.protocol}//${x.hostname}${x.pathname.replace(/\.git\/?$/, '').replace(/\/$/, '')}` }; } } catch { return null; }
@@ -1037,6 +1117,8 @@ function commitMenu(r) {
     '-',
     { label: 'Copy Commit Hash to Clipboard', run: () => A.copy(h, 'Commit hash') },
     { label: 'Copy Commit Subject to Clipboard', run: () => A.copy(plainMsg(r.s), 'Commit subject') },
+    '-',
+    { label: 'Explain with Claude…', run: () => CA.explain(h) },
   ];
 }
 function localBranchMenu(name) {
@@ -1054,6 +1136,7 @@ function localBranchMenu(name) {
     { label: 'Push Branch…', run: () => A.push(name) },
     '-',
     { label: 'Create Pull Request…', run: () => A.createPR(name, up ? splitRemote(up).remote : '') },
+    { label: 'Write PR description with Claude…', run: () => CA.prDesc(name) },
     { label: 'Copy Branch Name to Clipboard', run: () => A.copy(name, 'Branch name') },
   ];
 }
@@ -1069,6 +1152,7 @@ function remoteBranchMenu(full) {
     { label: 'Rebase current branch on Branch…', run: () => A.rebase(full, full) },
     '-',
     { label: 'Create Pull Request…', run: () => A.createPR(name, remote) },
+    { label: 'Write PR description with Claude…', run: () => CA.prDesc(full) },
     { label: 'Copy Branch Name to Clipboard', run: () => A.copy(full, 'Branch name') },
   ];
 }
@@ -1089,6 +1173,8 @@ const stashMenu = (sel, hash) => [
   { label: 'Copy Stash Hash to Clipboard', run: () => A.copy(hash, 'Stash hash') },
 ];
 const uncommittedMenu = () => [
+  { label: 'Commit…', run: CA.commit },
+  '-',
   { label: 'Stash uncommitted changes…', run: A.stashUncommitted },
   '-',
   { label: 'Reset uncommitted changes…', danger: true, run: A.resetUncommitted },

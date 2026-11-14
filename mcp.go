@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -153,6 +154,65 @@ func mcpTools() []tool {
 				defer resp.Body.Close()
 				b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 				return string(b), nil
+			}},
+		{Name: "git_status", Description: "Working tree status of a repository: current branch, ahead/behind, changed and untracked files (git status --short --branch).",
+			InputSchema: obj(map[string]any{"repo": typ("string", "path to the repository")}, "repo"),
+			handler: func(a map[string]any) (string, error) {
+				repo, err := cleanRepo(argStr(a, "repo", ""))
+				if err != nil {
+					return "", err
+				}
+				out, se, err := runGit(repo, 20*time.Second, 256<<10, nil, "status", "--short", "--branch", "--untracked-files=normal")
+				if err != nil {
+					return "", gitErr(se, err, out)
+				}
+				s := b2s(out)
+				if strings.Count(s, "\n") <= 1 {
+					s += "(working tree clean)\n"
+				}
+				return s, nil
+			}},
+		{Name: "git_log_search", Description: "Search commit messages (case-insensitive, fixed string) across all branches. Returns hash, date, author and subject.",
+			InputSchema: obj(map[string]any{"repo": typ("string", "path to the repository"), "query": typ("string", "text to find in commit messages"),
+				"limit": typ("integer", "max results, default 30, max 200")}, "repo", "query"),
+			handler: func(a map[string]any) (string, error) {
+				repo, err := cleanRepo(argStr(a, "repo", ""))
+				if err != nil {
+					return "", err
+				}
+				query := argStr(a, "query", "")
+				if strings.TrimSpace(query) == "" || len(query) > 500 || strings.ContainsAny(query, "\x00\n") {
+					return "", fmt.Errorf("query must be 1-500 characters on one line")
+				}
+				limit := argInt(a, "limit", 30)
+				if limit <= 0 || limit > 200 {
+					limit = 30
+				}
+				out, se, err := runGit(repo, 30*time.Second, 512<<10, nil, "log", "--all", "--no-color", "--regexp-ignore-case", "--fixed-strings",
+					"--grep="+query, "-n", strconv.Itoa(limit), "--date=short", "--format=%h%x09%ad%x09%an%x09%s%x09%D")
+				if err != nil {
+					return "", gitErr(se, err, out)
+				}
+				if len(strings.TrimSpace(string(out))) == 0 {
+					return "no matching commits\n", nil
+				}
+				return b2s(out), nil
+			}},
+		{Name: "git_create_branch", Description: "Create a local branch at a revision (default HEAD). Does not check it out and never overwrites an existing branch.",
+			InputSchema: obj(map[string]any{"repo": typ("string", "path to the repository"), "name": typ("string", "new branch name"),
+				"from": typ("string", "start revision: branch, tag or commit hash (default HEAD)")}, "repo", "name"),
+			handler: func(a map[string]any) (string, error) {
+				name, from := argStr(a, "name", ""), argStr(a, "from", "HEAD")
+				out, err := execGitAction(argStr(a, "repo", ""), "branch.create", aargs{"name": name, "hash": from})
+				if err != nil {
+					return out, err
+				}
+				return strings.TrimSpace("created branch " + name + " at " + from + "\n" + out), nil
+			}},
+		{Name: "git_stash", Description: "Stash the uncommitted changes of tracked files (git stash push), optionally with a message. Non-destructive: restore with git stash apply.",
+			InputSchema: obj(map[string]any{"repo": typ("string", "path to the repository"), "message": typ("string", "optional stash message")}, "repo"),
+			handler: func(a map[string]any) (string, error) {
+				return execGitAction(argStr(a, "repo", ""), "stash.push", aargs{"message": argStr(a, "message", "")})
 			}},
 	}, mcpExtra...)
 }
