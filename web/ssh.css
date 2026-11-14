@@ -1,1 +1,31 @@
-/* ssh tab styles (feature module). */
+/* SSH tab (ssh.js): hosts, tunnels, SFTP browser. */
+#ssh .ssh-sub{align-items:center}
+#ssh .ssh-sub .sp{flex:1}
+.ssh-agent{margin-bottom:4px;cursor:default}
+.ssh-agent:empty{display:none}
+.ssh-pane{display:none;flex:1;min-height:0;flex-direction:column;gap:12px;overflow:auto}
+.ssh-pane.on{display:flex}
+.ssh-pane>.card,.ssh-pane>.toolbar{flex-shrink:0}
+.ssh-pane>.card{overflow-x:auto}
+.ssh-pane>.card.scroll{flex:1 1 auto;min-height:120px}
+.ssh-form{grid-template-columns:1.2fr 1.4fr .5fr 1fr}
+.ssh-form .ssh-span2{grid-column:span 2}
+.form-grid label.ssh-check{flex-direction:row;align-items:center;gap:8px;font-weight:500;color:var(--fg);align-self:end;padding-bottom:6px}
+.ssh-table td{padding:6px 14px}
+.ssh-ell{display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+td.ssh-ell{display:table-cell}
+.ssh-err{max-width:220px;font-size:12px}
+.ssh-shadowed td{opacity:.65}
+.ssh-st{background:var(--surface2);color:var(--mut)}
+.ssh-st.bad{background:var(--bad-soft);color:var(--bad)}
+.ssh-files{flex:1;min-height:0;display:flex;gap:12px}
+.ssh-files>.card.scroll{flex:1}
+.ssh-preview{width:42%;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+.ssh-preview .card-head b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ssh-preview pre{flex:1;min-height:0}
+.ssh-fname{cursor:pointer}
+.ssh-fname .i{margin-right:7px;vertical-align:-3px;color:var(--mut)}
+.ssh-dir .ssh-fname{font-weight:600}
+.ssh-dir .ssh-fname .i{color:var(--acc)}
+#ssh-f-path{min-width:200px}
+@media (max-width:900px){.ssh-form{grid-template-columns:1fr 1fr}.ssh-files{flex-direction:column}.ssh-preview{width:auto;max-height:45%}}

@@ -254,10 +254,18 @@ func hostKeyCallback(warn func(string)) (ssh.HostKeyCallback, error) {
 	if err != nil {
 		return nil, err
 	}
+	added := map[string]string{} // hosts trusted during this dial (base does not re-read the file)
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		err := base(hostname, remote, key)
 		var ke *knownhosts.KeyError
 		if errors.As(err, &ke) && len(ke.Want) == 0 {
+			if k, ok := added[hostname]; ok {
+				if k == string(key.Marshal()) {
+					return nil
+				}
+				return fmt.Errorf("HOST KEY CHANGED for %s during connection: refusing to connect", hostname)
+			}
+			added[hostname] = string(key.Marshal())
 			// Trust on first use (like StrictHostKeyChecking=accept-new); mismatches are rejected.
 			knownHostsMu.Lock()
 			defer knownHostsMu.Unlock()

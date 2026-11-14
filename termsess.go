@@ -65,14 +65,20 @@ type termClient struct {
 	ch chan []byte // closed when the session ends or the client is dropped
 }
 
-type termSession struct {
+// termInfo is what GET /api/term/sessions reports.
+type termInfo struct {
 	ID      string `json:"id"`
 	Title   string `json:"title"`
 	Kind    string `json:"kind"`  // local | ssh
 	Where   string `json:"where"` // cwd or host
 	Created int64  `json:"created"`
 	Clients int    `json:"clients"`
+	Cols    int    `json:"cols"` // current pty size, so a re-attaching page can replay at the same geometry
+	Rows    int    `json:"rows"`
+}
 
+type termSession struct {
+	termInfo
 	p       ptyLike
 	wmu     sync.Mutex // serialises writes/resizes coming from several viewers
 	mu      sync.Mutex
@@ -108,8 +114,8 @@ func (r *termRegistry) full() bool {
 // Leading bytes (e.g. connection warnings) are put into the replay buffer.
 func (r *termRegistry) start(title, kind, where string, p ptyLike, lead []byte) (*termSession, error) {
 	s := &termSession{
-		ID: randID(8), Title: title, Kind: kind, Where: where, Created: time.Now().Unix(),
-		p: p, ring: ringBuf{max: termRingSize}, clients: map[*termClient]struct{}{},
+		termInfo: termInfo{ID: randID(8), Title: title, Kind: kind, Where: where, Created: time.Now().Unix()},
+		p:        p, ring: ringBuf{max: termRingSize}, clients: map[*termClient]struct{}{},
 	}
 	s.ring.Write(lead)
 	r.mu.Lock()
@@ -136,18 +142,22 @@ func (r *termRegistry) remove(id string) {
 	r.mu.Unlock()
 }
 
-func (r *termRegistry) list() []termSession {
+func (r *termRegistry) list() []termInfo {
 	r.mu.Lock()
 	all := make([]*termSession, 0, len(r.m))
 	for _, s := range r.m {
 		all = append(all, s)
 	}
 	r.mu.Unlock()
-	out := make([]termSession, 0, len(all))
+	out := make([]termInfo, 0, len(all))
 	for _, s := range all {
 		s.mu.Lock()
-		out = append(out, termSession{ID: s.ID, Title: s.Title, Kind: s.Kind, Where: s.Where, Created: s.Created, Clients: len(s.clients)})
+		v := termInfo{ID: s.ID, Title: s.Title, Kind: s.Kind, Where: s.Where, Created: s.Created, Clients: len(s.clients)}
 		s.mu.Unlock()
+		s.wmu.Lock()
+		v.Cols, v.Rows = s.Cols, s.Rows
+		s.wmu.Unlock()
+		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Created != out[j].Created {
@@ -267,7 +277,12 @@ func (s *termSession) resize(cols, rows int) {
 	}
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
-	_ = s.p.Resize(cols, rows)
+	if cols == s.Cols && rows == s.Rows {
+		return
+	}
+	if s.p.Resize(cols, rows) == nil {
+		s.Cols, s.Rows = cols, rows
+	}
 }
 
 // kill closes the pty (ending the process) and forgets the session. Safe to call repeatedly.

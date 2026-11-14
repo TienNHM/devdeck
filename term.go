@@ -230,5 +230,8 @@ func startTermSession(in termInit) (*termSession, error) {
 		p.Close()
 		return nil, err
 	}
+	s.wmu.Lock()
+	s.Cols, s.Rows = in.Cols, in.Rows
+	s.wmu.Unlock()
 	return s, nil
 }
