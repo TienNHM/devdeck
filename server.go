@@ -259,6 +259,9 @@ func runServe(args []string) {
 		writeJSON(w, map[string]any{"rss": rss, "version": version, "os": runtime.GOOS})
 	})
 	registerGitRoutes(mux)
+	for _, f := range routeRegistrars {
+		f(mux)
+	}
 	mux.HandleFunc("POST /api/quit", handleQuit)
 	mux.HandleFunc("/ws/term", handleTermWS)
 

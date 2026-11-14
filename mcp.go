@@ -50,7 +50,7 @@ func argInt(a map[string]any, k string, def int) int {
 }
 
 func mcpTools() []tool {
-	return []tool{
+	return append([]tool{
 		{Name: "list_ports", Description: "List TCP ports in LISTEN state with owning process name and PID.",
 			InputSchema: obj(map[string]any{}),
 			handler: func(map[string]any) (string, error) {
@@ -154,7 +154,7 @@ func mcpTools() []tool {
 				b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 				return string(b), nil
 			}},
-	}
+	}, mcpExtra...)
 }
 
 func renderASCIIGraph(g *GraphResult) string {

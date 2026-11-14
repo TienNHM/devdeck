@@ -5,19 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>devdeck</title>
 <script>
-try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}
+try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;if(localStorage.getItem('side')==='collapsed')document.documentElement.classList.add('side-collapsed')}catch(e){document.documentElement.dataset.theme='light'}
 </script>
 <link rel="stylesheet" href="vendor/xterm.css">
 <link rel="stylesheet" href="style.css">
+<!-- one stylesheet per feature module -->
+<link rel="stylesheet" href="ports.css">
+<link rel="stylesheet" href="projects.css">
 <link rel="stylesheet" href="git.css">
+<link rel="stylesheet" href="redis.css">
+<link rel="stylesheet" href="db.css">
+<link rel="stylesheet" href="docker.css">
+<link rel="stylesheet" href="logs.css">
+<link rel="stylesheet" href="term.css">
+<link rel="stylesheet" href="ssh.css">
+<link rel="stylesheet" href="claude.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-ports" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></symbol>
   <symbol id="i-procs" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+  <symbol id="i-projects" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 6"/></symbol>
   <symbol id="i-redis" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></symbol>
+  <symbol id="i-docker" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></symbol>
+  <symbol id="i-logs" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
   <symbol id="i-term" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></symbol>
+  <symbol id="i-ssh" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></symbol>
   <symbol id="i-claude" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4M4 13a8 8 0 0 0 14 4M4 4v4h4M20 20v-4h-4"/></symbol>
@@ -26,25 +41,50 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></symbol>
 </svg>
 
 <header>
-  <div class="brand"><span class="logo"></span>devdeck</div>
-  <nav id="tabs">
-    <button data-tab="ports" class="on"><svg class="i"><use href="#i-ports"/></svg><span>Ports</span></button>
-    <button data-tab="procs"><svg class="i"><use href="#i-procs"/></svg><span>Processes</span></button>
-    <button data-tab="git"><svg class="i"><use href="#i-git"/></svg><span>Git</span></button>
-    <button data-tab="redis"><svg class="i"><use href="#i-redis"/></svg><span>Redis</span></button>
-    <button data-tab="term"><svg class="i"><use href="#i-term"/></svg><span>Terminal</span></button>
-    <button data-tab="claude"><svg class="i"><use href="#i-claude"/></svg><span>Claude</span></button>
-  </nav>
+  <button id="collapse" class="icon-btn" title="Collapse sidebar"><svg class="i"><use href="#i-menu"/></svg></button>
+  <div class="brand"><span class="logo"></span><span>devdeck</span></div>
+  <button id="palbtn" class="palbtn" title="Command palette (Ctrl+K)"><svg class="i"><use href="#i-search"/></svg><span data-i18n="palette.placeholder">Search or run a command…</span><kbd>Ctrl K</kbd></button>
+  <span class="sp"></span>
+  <span id="header-extra"></span>
   <span id="self" class="chip" title="devdeck memory use"></span>
+  <button id="lang" class="icon-btn" title="Language"><svg class="i"><use href="#i-globe"/></svg></button>
   <button id="theme" class="icon-btn" title="Toggle light/dark"><svg class="i"><use href="#i-moon"/></svg></button>
-  <button id="quit" class="btn ghost-danger" title="Stop the devdeck server"><svg class="i"><use href="#i-power"/></svg><span>Quit</span></button>
+  <button id="quit" class="btn ghost-danger" title="Stop the devdeck server"><svg class="i"><use href="#i-power"/></svg><span data-i18n="quit">Quit</span></button>
 </header>
 
+<aside id="side">
+  <nav id="tabs">
+    <div class="ng" data-i18n="nav.system">System</div>
+    <button data-tab="ports"><svg class="i"><use href="#i-ports"/></svg><span data-i18n="tab.ports">Ports</span></button>
+    <button data-tab="procs"><svg class="i"><use href="#i-procs"/></svg><span data-i18n="tab.procs">Processes</span></button>
+    <div class="ng" data-i18n="nav.code">Code</div>
+    <button data-tab="projects"><svg class="i"><use href="#i-projects"/></svg><span data-i18n="tab.projects">Projects</span></button>
+    <button data-tab="git"><svg class="i"><use href="#i-git"/></svg><span data-i18n="tab.git">Git</span></button>
+    <div class="ng" data-i18n="nav.data">Data</div>
+    <button data-tab="redis"><svg class="i"><use href="#i-redis"/></svg><span data-i18n="tab.redis">Redis</span></button>
+    <button data-tab="db"><svg class="i"><use href="#i-db"/></svg><span data-i18n="tab.db">Database</span></button>
+    <div class="ng" data-i18n="nav.ops">Ops</div>
+    <button data-tab="docker"><svg class="i"><use href="#i-docker"/></svg><span data-i18n="tab.docker">Docker</span></button>
+    <button data-tab="logs"><svg class="i"><use href="#i-logs"/></svg><span data-i18n="tab.logs">Logs</span></button>
+    <div class="ng" data-i18n="nav.remote">Remote</div>
+    <button data-tab="term"><svg class="i"><use href="#i-term"/></svg><span data-i18n="tab.term">Terminal</span></button>
+    <button data-tab="ssh"><svg class="i"><use href="#i-ssh"/></svg><span data-i18n="tab.ssh">SSH</span></button>
+    <div class="ng" data-i18n="nav.ai">AI</div>
+    <button data-tab="claude"><svg class="i"><use href="#i-claude"/></svg><span data-i18n="tab.claude">Claude</span></button>
+  </nav>
+</aside>
+
 <main>
-  <section id="ports" class="on">
+  <!-- ============ ports (owner: ports.js) ============ -->
+  <section id="ports">
     <div class="toolbar">
       <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="ports-q" placeholder="Filter by port, process or PID"></label>
       <span class="sp"></span><span id="ports-count" class="muted"></span>
@@ -54,7 +94,9 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
       <table><thead><tr><th>Port</th><th>Address</th><th>Process</th><th>PID</th><th></th></tr></thead><tbody id="ports-t"></tbody></table>
     </div>
   </section>
+  <!-- ============ /ports ============ -->
 
+  <!-- ============ procs (owner: ports.js) ============ -->
   <section id="procs">
     <div class="toolbar">
       <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="procs-q" placeholder="Filter by name or PID"></label>
@@ -65,11 +107,19 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
       <table><thead><tr><th>Name</th><th>PID</th><th>PPID</th><th>Memory</th><th></th></tr></thead><tbody id="procs-t"></tbody></table>
     </div>
   </section>
+  <!-- ============ /procs ============ -->
 
+  <!-- ============ projects (owner: projects.js) ============ -->
+  <section id="projects"><div class="empty">Projects are coming soon.</div></section>
+  <!-- ============ /projects ============ -->
+
+  <!-- ============ git (owner: git.js) ============ -->
   <section id="git">
     <div id="gg" class="gg"><div class="empty">Loading Git…</div></div>
   </section>
+  <!-- ============ /git ============ -->
 
+  <!-- ============ redis (owner: redis.js) ============ -->
   <section id="redis">
     <div class="toolbar">
       <input id="r-addr" value="127.0.0.1:6379" placeholder="host:port" style="width:170px">
@@ -89,7 +139,21 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
     </div>
     <div id="r-empty" class="empty">Connect to a Redis server. Access is read-only.</div>
   </section>
+  <!-- ============ /redis ============ -->
 
+  <!-- ============ db (owner: db.js) ============ -->
+  <section id="db"><div class="empty">Database viewer is coming soon.</div></section>
+  <!-- ============ /db ============ -->
+
+  <!-- ============ docker (owner: docker.js) ============ -->
+  <section id="docker"><div class="empty">Docker panel is coming soon.</div></section>
+  <!-- ============ /docker ============ -->
+
+  <!-- ============ logs (owner: logs.js) ============ -->
+  <section id="logs"><div class="empty">Log tailer is coming soon.</div></section>
+  <!-- ============ /logs ============ -->
+
+  <!-- ============ term (owner: term.js) ============ -->
   <section id="term">
     <div class="toolbar">
       <button class="btn primary" id="t-local"><svg class="i"><use href="#i-plus"/></svg>Shell</button>
@@ -116,13 +180,20 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
     <div id="t-tabs" class="tabs"></div>
     <div id="t-area"><div id="t-empty" class="empty">No terminals open. Start a shell, or run Claude in a folder.</div></div>
   </section>
+  <!-- ============ /term ============ -->
 
+  <!-- ============ ssh (owner: ssh.js) ============ -->
+  <section id="ssh"><div class="empty">SSH tunnels and file browser are coming soon.</div></section>
+  <!-- ============ /ssh ============ -->
+
+  <!-- ============ claude (owner: claude.js) ============ -->
   <section id="claude">
     <div class="toolbar"><span class="muted">Live Claude Code sessions reported by hooks. Run <code>devdeck hooks-config</code> for setup.</span></div>
     <div class="card scroll">
       <table><thead><tr><th>State</th><th>Directory</th><th>Last event</th><th>Detail</th><th>Updated</th><th></th></tr></thead><tbody id="c-t"></tbody></table>
     </div>
   </section>
+  <!-- ============ /claude ============ -->
 </main>
 
 <dialog id="dlg">
@@ -132,15 +203,31 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
     <input id="dlg-in" type="password" autocomplete="off" hidden>
     <div class="dlg-actions">
       <button id="dlg-ok" class="btn primary" value="ok">OK</button>
-      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn" value="cancel" data-i18n="cancel">Cancel</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="pal">
+  <input id="pal-q" placeholder="Type a command or search…" autocomplete="off" spellcheck="false">
+  <div id="pal-list"></div>
+  <div class="pal-foot muted"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> run · <kbd>Esc</kbd> close</div>
 </dialog>
 <div id="toasts"></div>
 
 <script src="vendor/xterm.js"></script>
 <script src="vendor/addon-fit.js"></script>
 <script src="app.js"></script>
+<!-- feature modules: each owns its section, its .css and its own globals -->
+<script src="ports.js"></script>
+<script src="projects.js"></script>
 <script src="git.js"></script>
+<script src="redis.js"></script>
+<script src="db.js"></script>
+<script src="docker.js"></script>
+<script src="logs.js"></script>
+<script src="term.js"></script>
+<script src="ssh.js"></script>
+<script src="claude.js"></script>
 </body>
 </html>
