@@ -6,12 +6,12 @@
     "architecture": {
         "64bit": {
             "url": "https://github.com/TienNHM/devdeck/releases/download/v0.2.0/devdeck_v0.2.0_windows_amd64.zip",
-            "hash": "",
+            "hash": "571bab61a07f16653c14b3c28c6cd01a59ffecc2f9281ceea31485878a9605b0",
             "extract_dir": "devdeck_v0.2.0_windows_amd64"
         },
         "arm64": {
             "url": "https://github.com/TienNHM/devdeck/releases/download/v0.2.0/devdeck_v0.2.0_windows_arm64.zip",
-            "hash": "",
+            "hash": "d4d8ace5be9282c175930a82350494a4332ee0ef325b1a6720ed8d356c2a8498",
             "extract_dir": "devdeck_v0.2.0_windows_arm64"
         }
     },
