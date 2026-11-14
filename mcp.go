@@ -133,7 +133,7 @@ func mcpTools() []tool {
 				b, _ := json.MarshalIndent(kv, "", "  ")
 				return string(b), nil
 			}},
-		{Name: "ssh_exec", Description: "Run one command on a SSH host saved in ~/.devdeck/config.json (key auth only). Output capped at 64KB.",
+		{Name: "ssh_exec", Description: "Run one command on a saved devdeck host or a ~/.ssh/config alias (keys / ssh-agent, ProxyJump supported; no passwords). Output capped at 64KB.",
 			InputSchema: obj(map[string]any{"host": typ("string", "saved host name"), "command": typ("string", "command line"), "timeout_sec": typ("integer", "default 30")}, "host", "command"),
 			handler: func(a map[string]any) (string, error) {
 				return sshExec(argStr(a, "host", ""), argStr(a, "command", ""), time.Duration(argInt(a, "timeout_sec", 30))*time.Second)
