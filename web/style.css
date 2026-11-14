@@ -131,18 +131,9 @@ pre.plain{background:none}
 .ref.tag{background:var(--warn-soft);color:var(--warn)}.ref.head{background:var(--acc);color:var(--acc-fg)}
 .ref.remote{background:var(--surface2);color:var(--mut);border:1px solid var(--line)}
 
-/* redis */
-#r-body{flex:1;min-height:0;display:flex;gap:12px}
-#r-left{width:38%;display:flex;flex-direction:column;min-height:0;flex-shrink:0}
-#r-keys{flex:1;overflow:auto;margin:8px 0}
-#r-more{margin:0 10px 10px}
-.rk{display:flex;gap:8px;align-items:center;padding:4px 12px;cursor:pointer}
-.rk:hover{background:var(--surface2)}.rk.on{background:var(--acc-soft)}
-.rk .k{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rk .ttl{color:var(--mut);font-size:11px}
+/* redis type tags (shared) */
 .tp{font-size:10.5px;font-weight:700;text-transform:uppercase;padding:0 7px;border-radius:5px;line-height:17px;background:var(--surface2);color:var(--mut);border:1px solid var(--line)}
 .tp.string{color:#2563eb}.tp.hash{color:#9333ea}.tp.list{color:#0d9488}.tp.set{color:#c2410c}.tp.zset{color:#be185d}.tp.stream{color:#4d7c0f}
-#r-empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r)}
 
 /* terminal */
 #term.on{overflow:hidden}

@@ -47,6 +47,8 @@ func guard(port int, token string, next http.Handler) http.Handler {
 		fmt.Sprintf("127.0.0.1:%d", port): true,
 		fmt.Sprintf("localhost:%d", port): true,
 	}
+	// Cookies ignore ports, so the name carries it: several devdecks on one machine keep separate logins.
+	cookieName := fmt.Sprintf("dd_token_%d", port)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !hosts[r.Host] {
 			http.Error(w, "forbidden host", http.StatusForbidden)
@@ -54,7 +56,7 @@ func guard(port int, token string, next http.Handler) http.Handler {
 		}
 		if t := r.URL.Query().Get("t"); t != "" {
 			if subtle.ConstantTimeCompare([]byte(t), []byte(token)) == 1 {
-				http.SetCookie(w, &http.Cookie{Name: "dd_token", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
+				http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 				q := r.URL.Query()
 				q.Del("t")
 				u := url.URL{Path: r.URL.Path, RawQuery: q.Encode()}
@@ -63,7 +65,7 @@ func guard(port int, token string, next http.Handler) http.Handler {
 			}
 		}
 		ok := false
-		if c, err := r.Cookie("dd_token"); err == nil && subtle.ConstantTimeCompare([]byte(c.Value), []byte(token)) == 1 {
+		if c, err := r.Cookie(cookieName); err == nil && subtle.ConstantTimeCompare([]byte(c.Value), []byte(token)) == 1 {
 			ok = true
 		}
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") &&
