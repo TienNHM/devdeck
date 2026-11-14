@@ -121,28 +121,110 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
 
   <!-- ============ redis (owner: redis.js) ============ -->
   <section id="redis">
-    <div class="toolbar">
-      <input id="r-addr" value="127.0.0.1:6379" placeholder="host:port" style="width:170px">
-      <input id="r-db" type="number" value="0" min="0" style="width:68px" title="Database index">
-      <input id="r-pass" type="password" placeholder="Password (memory only)" style="width:190px" autocomplete="off">
-      <label class="check"><input id="r-tls" type="checkbox"> TLS</label>
-      <button class="btn primary" id="r-connect">Connect</button>
-      <span id="r-info" class="info"></span>
+    <div class="toolbar rd-conn">
+      <select id="rd-prof" title="Saved connection profiles" data-i18n-title="redis.profiles"></select>
+      <input id="rd-addr" class="rd-addr" value="127.0.0.1:6379" placeholder="host:port" spellcheck="false">
+      <input id="rd-db" class="rd-db" type="number" value="0" min="0" max="1024" title="Database index" data-i18n-title="redis.dbIndex">
+      <input id="rd-user" class="rd-user" placeholder="Username (optional)" data-i18n-ph="redis.user" autocomplete="off" spellcheck="false">
+      <input id="rd-pass" class="rd-pass" type="password" placeholder="Password (memory only)" data-i18n-ph="redis.pass" autocomplete="off">
+      <label class="check"><input id="rd-tls" type="checkbox"> TLS</label>
+      <label class="check rd-wcheck" title="Allow changing data on this connection" data-i18n-title="redis.writeTip"><input id="rd-write" type="checkbox"> <span data-i18n="redis.writeMode">Write mode</span></label>
+      <button class="btn primary" id="rd-connect" data-i18n="redis.connect">Connect</button>
+      <button class="btn" id="rd-save" data-i18n="redis.saveProfile">Save profile</button>
+      <button class="btn danger" id="rd-delprof" data-i18n="redis.deleteProfile" hidden>Delete profile</button>
+      <span class="sp"></span>
+      <span id="rd-status" class="info"></span>
+      <button class="btn" id="rd-disconnect" data-i18n="redis.disconnect" hidden>Disconnect</button>
     </div>
-    <div id="r-body" hidden>
-      <div class="card" id="r-left">
-        <div class="toolbar pad"><label class="search"><svg class="i"><use href="#i-search"/></svg><input id="r-match" value="*" placeholder="Match pattern"></label><button class="btn" id="r-scan">Scan</button></div>
-        <div id="r-keys"></div>
-        <button class="btn" id="r-more" hidden>Load more</button>
+    <div id="rd-body" class="rd-body" hidden>
+      <div class="rd-seg" id="rd-views">
+        <button data-v="keys" class="on" data-i18n="redis.keys">Keys</button>
+        <button data-v="info" data-i18n="redis.server">Server info</button>
       </div>
-      <div class="card scroll" id="r-right"><pre id="r-val" class="plain">Select a key to inspect it.</pre></div>
+      <div id="rd-keysview" class="rd-main">
+        <div class="card rd-left">
+          <div class="rd-ltools">
+            <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="rd-match" value="*" placeholder="Match pattern" data-i18n-ph="redis.match" spellcheck="false"></label>
+            <button class="btn" id="rd-scan" data-i18n="redis.scan">Scan</button>
+            <div class="rd-seg sm" id="rd-mode"><button data-m="tree" class="on" data-i18n="redis.tree">Tree</button><button data-m="list" data-i18n="redis.list">List</button></div>
+          </div>
+          <div class="rd-wbar" id="rd-wbar" hidden>
+            <label class="check"><input id="rd-selall" type="checkbox"> <span data-i18n="redis.selectAll">Select all loaded</span></label>
+            <span class="sp"></span>
+            <button class="btn sm" id="rd-new"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="redis.newKey">New key</span></button>
+            <button class="btn sm danger" id="rd-delsel" disabled><svg class="i"><use href="#i-trash"/></svg><span id="rd-delsel-t">Delete</span></button>
+          </div>
+          <div id="rd-keys" class="rd-keys"></div>
+          <div class="rd-lfoot"><span id="rd-count" class="muted"></span><span class="sp"></span><button class="btn sm" id="rd-more" data-i18n="redis.more" hidden>Load more</button></div>
+        </div>
+        <div class="card rd-right" id="rd-detail"><div class="empty" data-i18n="redis.pick">Select a key to inspect it.</div></div>
+      </div>
+      <div id="rd-infoview" class="rd-infoview" hidden></div>
     </div>
-    <div id="r-empty" class="empty">Connect to a Redis server. Access is read-only.</div>
+    <div id="rd-empty" class="empty rd-empty" data-i18n="redis.empty">Connect to a Redis server. Access is read-only unless you turn on write mode.</div>
   </section>
   <!-- ============ /redis ============ -->
 
   <!-- ============ db (owner: db.js) ============ -->
-  <section id="db"><div class="empty">Database viewer is coming soon.</div></section>
+  <section id="db">
+    <div class="toolbar db-conn">
+      <select id="db-prof" title="Saved connection profiles" data-i18n-title="db.profiles"></select>
+      <select id="db-driver" title="Database type" data-i18n-title="db.driver">
+        <option value="postgres">PostgreSQL</option><option value="mysql">MySQL / MariaDB</option><option value="sqlite">SQLite</option>
+      </select>
+      <input id="db-host" class="db-net db-host" placeholder="Host" data-i18n-ph="db.host" spellcheck="false">
+      <input id="db-port" class="db-net db-port" placeholder="Port" data-i18n-ph="db.port" inputmode="numeric">
+      <input id="db-user" class="db-net db-user" placeholder="User" data-i18n-ph="db.user" autocomplete="off" spellcheck="false">
+      <input id="db-name" class="db-net db-dbname" placeholder="Database" data-i18n-ph="db.database" spellcheck="false">
+      <select id="db-ssl" class="db-net" title="TLS / SSL mode" data-i18n-title="db.ssl"></select>
+      <input id="db-path" class="db-file db-path" placeholder="Path to .db / .sqlite file" data-i18n-ph="db.path" spellcheck="false" hidden>
+      <input id="db-pass" class="db-net db-pass" type="password" placeholder="Password (memory only)" data-i18n-ph="db.pass" autocomplete="off">
+      <button class="btn primary" id="db-connect" data-i18n="db.connect">Connect</button>
+      <button class="btn" id="db-save" data-i18n="db.saveProfile">Save profile</button>
+      <button class="btn danger" id="db-delprof" data-i18n="db.deleteProfile" hidden>Delete profile</button>
+      <span class="sp"></span>
+      <span id="db-status" class="info"></span>
+      <button class="btn" id="db-disconnect" data-i18n="db.disconnect" hidden>Disconnect</button>
+    </div>
+    <div id="db-body" class="db-main" hidden>
+      <div class="card db-side">
+        <div class="db-side-head">
+          <select id="db-schema" title="Schema" data-i18n-title="db.schema"></select>
+          <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="db-tq" placeholder="Filter tables" data-i18n-ph="db.filterTables" spellcheck="false"></label>
+        </div>
+        <div id="db-tables" class="db-tables"></div>
+      </div>
+      <div class="db-work">
+        <div class="db-seg" id="db-views">
+          <button data-v="data" class="on" data-i18n="db.data">Data</button>
+          <button data-v="struct" data-i18n="db.structure">Structure</button>
+          <button data-v="sql" data-i18n="db.sql">SQL</button>
+          <span class="sp"></span><span id="db-cur" class="db-cur mono"></span>
+        </div>
+        <div id="db-data" class="card db-pane"></div>
+        <div id="db-struct" class="card db-pane scroll" hidden></div>
+        <div id="db-sql" class="db-pane db-sqlpane" hidden>
+          <div class="card db-editor">
+            <textarea id="db-sqltext" spellcheck="false" placeholder="SELECT * FROM … (Ctrl+Enter to run; runs the selection if any)" data-i18n-ph="db.sqlph"></textarea>
+            <div class="db-etools">
+              <button class="btn primary sm" id="db-run"><svg class="i"><use href="#i-play"/></svg><span data-i18n="db.run">Run</span></button>
+              <span class="muted db-note" data-i18n="db.roNote">Read-only transaction, rolled back · max 1000 rows · 15 s timeout</span>
+              <span class="sp"></span>
+              <span id="db-qstat" class="muted"></span>
+              <button class="btn sm" id="db-qcopy" data-i18n="db.copyCsv" disabled>Copy CSV</button>
+              <button class="btn sm" id="db-qdl" data-i18n="db.downloadCsv" disabled>Download CSV</button>
+            </div>
+          </div>
+          <div id="db-qres" class="card db-qres"><div class="empty" data-i18n="db.noResult">Run a query to see results.</div></div>
+        </div>
+      </div>
+      <aside id="db-cell" class="card db-cellpane" hidden>
+        <div class="card-head"><b id="db-cell-t"></b><span><button class="btn sm" id="db-cell-copy" data-i18n="db.copy">Copy</button> <button class="btn sm" id="db-cell-x" aria-label="Close">✕</button></span></div>
+        <div id="db-cell-v" class="db-cellv"></div>
+      </aside>
+    </div>
+    <div id="db-empty" class="empty db-empty" data-i18n="db.empty">Connect to PostgreSQL, MySQL / MariaDB or a SQLite file. Everything runs read-only.</div>
+  </section>
   <!-- ============ /db ============ -->
 
   <!-- ============ docker (owner: docker.js) ============ -->
