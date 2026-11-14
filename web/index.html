@@ -287,34 +287,96 @@ try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark
   <!-- ============ term (owner: term.js) ============ -->
   <section id="term">
     <div class="toolbar">
-      <button class="btn primary" id="t-local"><svg class="i"><use href="#i-plus"/></svg>Shell</button>
+      <select id="t-shell" title="Shell" data-i18n-title="term.shell"></select>
+      <button class="btn primary" id="t-local"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="term.newShell">Shell</span></button>
       <button class="btn" id="t-claude"><svg class="i"><use href="#i-claude"/></svg>Claude</button>
-      <input id="t-cwd" class="wide" placeholder="Working directory (optional)">
+      <input id="t-cwd" class="wide" placeholder="Working directory (optional)" data-i18n-ph="term.cwd">
       <span class="sep"></span>
-      <select id="t-host"></select>
+      <select id="t-host" title="SSH host" data-i18n-title="term.host"></select>
       <button class="btn primary" id="t-ssh"><svg class="i"><use href="#i-plus"/></svg>SSH</button>
-      <button class="btn" id="t-sshclaude"><svg class="i"><use href="#i-claude"/></svg>SSH + Claude</button>
-      <button class="btn" id="t-hosts">Manage hosts</button>
-    </div>
-    <div id="hosts-edit" class="card" hidden>
-      <div class="card-head"><b id="h-title">SSH hosts</b><span class="muted">Passwords are never saved. Leave the key empty to try ~/.ssh keys.</span></div>
-      <div class="form-grid">
-        <label>Name<input id="h-name" placeholder="prod-api"></label>
-        <label>Host<input id="h-host" placeholder="10.0.0.5"></label>
-        <label>Port<input id="h-port" placeholder="22" inputmode="numeric"></label>
-        <label>User<input id="h-user" placeholder="ubuntu"></label>
-        <label class="span2">Private key path<input id="h-key" placeholder="C:\Users\you\.ssh\id_ed25519"></label>
-      </div>
-      <div class="form-actions"><button class="btn primary" id="h-save">Save host</button><button class="btn" id="h-cancel" hidden>Cancel edit</button></div>
-      <table class="hosts"><tbody id="h-list"></tbody></table>
+      <button class="btn" id="t-sshclaude"><svg class="i"><use href="#i-claude"/></svg><span data-i18n="term.sshClaude">SSH + Claude</span></button>
+      <button class="btn" id="t-hosts"><svg class="i"><use href="#i-ssh"/></svg><span data-i18n="term.manageHosts">Manage hosts</span></button>
     </div>
     <div id="t-tabs" class="tabs"></div>
-    <div id="t-area"><div id="t-empty" class="empty">No terminals open. Start a shell, or run Claude in a folder.</div></div>
+    <div id="t-area"><div id="t-empty" class="empty" data-i18n="term.empty">No terminals open. Start a shell, or run Claude in a folder. Terminals keep running when you reload the page.</div></div>
   </section>
   <!-- ============ /term ============ -->
 
   <!-- ============ ssh (owner: ssh.js) ============ -->
-  <section id="ssh"><div class="empty">SSH tunnels and file browser are coming soon.</div></section>
+  <section id="ssh">
+    <div class="tabs ssh-sub">
+      <span class="ttab on" data-sub="hosts" data-i18n="ssh.hosts">Hosts</span>
+      <span class="ttab" data-sub="tunnels" data-i18n="ssh.tunnels">Tunnels</span>
+      <span class="ttab" data-sub="files" data-i18n="ssh.files">Files</span>
+      <span class="sp"></span>
+      <span id="ssh-agent" class="pill ssh-agent"></span>
+    </div>
+
+    <div class="ssh-pane on" data-pane="hosts">
+      <div class="card">
+        <div class="card-head"><b id="ssh-h-title" data-i18n="ssh.savedHosts">Saved hosts</b><span class="muted" data-i18n="ssh.hostsHint">Passwords are never saved. Without a key path, ssh-agent and ~/.ssh keys are tried.</span></div>
+        <div class="form-grid ssh-form">
+          <label><span data-i18n="ssh.name">Name</span><input id="ssh-h-name" placeholder="prod-api"></label>
+          <label><span data-i18n="ssh.address">Host</span><input id="ssh-h-host" placeholder="10.0.0.5"></label>
+          <label><span data-i18n="ssh.port">Port</span><input id="ssh-h-port" placeholder="22" inputmode="numeric"></label>
+          <label><span data-i18n="ssh.user">User</span><input id="ssh-h-user" placeholder="ubuntu"></label>
+          <label class="ssh-span2"><span data-i18n="ssh.keyPath">Private key path</span><input id="ssh-h-key" placeholder="~/.ssh/id_ed25519"></label>
+          <label class="ssh-span2"><span data-i18n="ssh.jump">Jump hosts (ProxyJump)</span><input id="ssh-h-jump" placeholder="bastion, user@10.0.0.1:2222" data-i18n-ph="ssh.jumpPh"></label>
+        </div>
+        <div class="form-actions"><button class="btn primary" id="ssh-h-save" data-i18n="ssh.saveHost">Save host</button><button class="btn" id="ssh-h-cancel" hidden data-i18n="ssh.cancelEdit">Cancel edit</button></div>
+        <table class="ssh-table"><tbody id="ssh-h-list"></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-head"><b data-i18n="ssh.configHosts">From ~/.ssh/config</b><span class="muted" data-i18n="ssh.configHint">Read-only. Edit the file to change these.</span></div>
+        <table class="ssh-table"><tbody id="ssh-c-list"></tbody></table>
+      </div>
+    </div>
+
+    <div class="ssh-pane" data-pane="tunnels">
+      <div class="toolbar">
+        <button class="btn primary" id="ssh-t-add"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="ssh.addTunnel">Add tunnel</span></button>
+        <span class="muted" data-i18n="ssh.tunnelHint">Local forwards listen on 127.0.0.1 only. Tunnels do not start by themselves.</span>
+      </div>
+      <div class="card" id="ssh-t-form" hidden>
+        <div class="card-head"><b id="ssh-t-title" data-i18n="ssh.newTunnel">New tunnel</b></div>
+        <div class="form-grid ssh-form">
+          <label><span data-i18n="ssh.name">Name</span><input id="ssh-t-name" placeholder="postgres on prod" data-i18n-ph="ssh.tunnelNamePh"></label>
+          <label><span data-i18n="ssh.via">Through host</span><select id="ssh-t-host"></select></label>
+          <label><span data-i18n="ssh.localPort">Local port</span><input id="ssh-t-lport" placeholder="15432" inputmode="numeric"></label>
+          <label><span data-i18n="ssh.remotePort">Remote port</span><input id="ssh-t-rport" placeholder="5432" inputmode="numeric"></label>
+          <label class="ssh-span2"><span data-i18n="ssh.remoteHost">Remote host (as seen from the SSH host)</span><input id="ssh-t-rhost" placeholder="127.0.0.1"></label>
+          <label class="ssh-span2 ssh-check"><input type="checkbox" id="ssh-t-auto"><span data-i18n="ssh.autoReconnect">Reconnect automatically when the SSH connection drops</span></label>
+        </div>
+        <div class="form-actions"><button class="btn primary" id="ssh-t-save" data-i18n="ssh.saveTunnel">Save tunnel</button><button class="btn" id="ssh-t-cancel" data-i18n="cancel">Cancel</button></div>
+      </div>
+      <div class="card scroll">
+        <table><thead><tr><th data-i18n="ssh.name">Name</th><th data-i18n="ssh.local">Local</th><th data-i18n="ssh.remote">Remote</th><th data-i18n="ssh.status">Status</th><th data-i18n="ssh.conns">Connections</th><th data-i18n="ssh.traffic">Traffic</th><th></th></tr></thead><tbody id="ssh-t-list"></tbody></table>
+      </div>
+    </div>
+
+    <div class="ssh-pane" data-pane="files">
+      <div class="toolbar">
+        <select id="ssh-f-host" title="Host" data-i18n-title="ssh.host"></select>
+        <button class="btn primary" id="ssh-f-connect" data-i18n="ssh.connect">Connect</button>
+        <span class="sep"></span>
+        <button class="btn" id="ssh-f-up" title="Parent folder" data-i18n-title="ssh.up" disabled>↑</button>
+        <input id="ssh-f-path" class="wide mono" placeholder="/home/user" disabled>
+        <button class="btn" id="ssh-f-refresh" title="Refresh" data-i18n-title="ssh.refresh" disabled><svg class="i"><use href="#i-refresh"/></svg></button>
+        <button class="btn" id="ssh-f-mkdir" disabled><svg class="i"><use href="#i-plus"/></svg><span data-i18n="ssh.newFolder">New folder</span></button>
+        <button class="btn" id="ssh-f-upload" disabled data-i18n="ssh.upload">Upload…</button>
+        <input type="file" id="ssh-f-file" multiple hidden>
+      </div>
+      <div class="ssh-files">
+        <div class="card scroll">
+          <table><thead><tr><th data-i18n="ssh.name">Name</th><th data-i18n="ssh.size">Size</th><th data-i18n="ssh.modified">Modified</th><th data-i18n="ssh.mode">Mode</th><th></th></tr></thead><tbody id="ssh-f-list"><tr><td colspan="5" class="empty" data-i18n="ssh.pickHost">Pick a host and connect to browse its files over SFTP.</td></tr></tbody></table>
+        </div>
+        <div class="card ssh-preview" id="ssh-f-preview" hidden>
+          <div class="card-head"><b id="ssh-f-pname" class="mono"></b><button class="btn sm" id="ssh-f-pclose" data-i18n="ssh.close">Close</button></div>
+          <pre id="ssh-f-ptext"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
   <!-- ============ /ssh ============ -->
 
   <!-- ============ claude (owner: claude.js) ============ -->

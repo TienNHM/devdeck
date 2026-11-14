@@ -1,1 +1,6 @@
-/* term tab styles (feature module). */
+/* Terminal tab (term.js). */
+#t-tabs{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+#t-tabs .ttab{flex-shrink:0}
+#t-tabs .ttab>span{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#t-tabs .ttab.term-dead>span{opacity:.55;font-style:italic}
+#t-shell{max-width:170px}

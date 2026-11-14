@@ -1,39 +1,34 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type termInit struct {
 	Kind       string `json:"kind"` // "local" | "ssh"
+	Title      string `json:"title"`
 	Cols       int    `json:"cols"`
 	Rows       int    `json:"rows"`
 	Cwd        string `json:"cwd"`
 	Cmd        string `json:"cmd"`     // optional command to run (e.g. "claude")
-	Profile    string `json:"profile"` // saved SSH host name
+	Shell      string `json:"shell"`   // local shell id from /api/term/shells (empty = default)
+	Profile    string `json:"profile"` // saved or ~/.ssh/config host name
 	Host       string `json:"host"`
 	Port       int    `json:"port"`
 	User       string `json:"user"`
 	KeyPath    string `json:"keyPath"`
 	Password   string `json:"password"`
 	Passphrase string `json:"passphrase"`
+	Attach     string `json:"attach"` // re-attach to a live session instead of starting one
 }
 
 type ptyLike interface {
@@ -41,6 +36,40 @@ type ptyLike interface {
 	Resize(cols, rows int) error
 }
 
+// termShell is a local shell offered in the picker.
+type termShell struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Path string `json:"-"`
+}
+
+func init() {
+	addRoutes(func(mux *http.ServeMux) {
+		mux.HandleFunc("GET /api/term/sessions", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, termReg.list()) })
+		mux.HandleFunc("DELETE /api/term/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
+			if s := termReg.get(r.PathValue("id")); s != nil {
+				s.kill()
+			}
+			writeJSON(w, map[string]bool{"ok": true})
+		})
+		mux.HandleFunc("GET /api/term/shells", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, localShells()) })
+	})
+}
+
+func termClip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
+// handleTermWS speaks a tiny protocol: the first text message is a termInit (start a session) or
+// {"attach": id}. Then binary frames carry terminal bytes both ways; text frames are control
+// messages: server→client {"id":…}, {"exit":true}, {"error":…,"auth":bool}; client→server
+// {"resize":{cols,rows}} and {"close":true} (kill). Closing the socket only detaches.
 func handleTermWS(w http.ResponseWriter, r *http.Request) {
 	ws, err := websocket.Accept(w, r, nil) // enforces same-origin
 	if err != nil {
@@ -60,48 +89,63 @@ func handleTermWS(w http.ResponseWriter, r *http.Request) {
 		ws.Close(websocket.StatusPolicyViolation, "bad init message")
 		return
 	}
-	if in.Cols <= 0 {
-		in.Cols = 120
+	control := func(v any) {
+		b, _ := json.Marshal(v)
+		_ = ws.Write(ctx, websocket.MessageText, b)
 	}
-	if in.Rows <= 0 {
-		in.Rows = 30
-	}
-	say := func(s string) { _ = ws.Write(ctx, websocket.MessageBinary, []byte("\r\n"+s+"\r\n")) }
 
-	var p ptyLike
-	switch in.Kind {
-	case "local":
-		p, err = startLocal(in)
-	case "ssh":
-		p, err = startSSH(in, say)
-	default:
-		err = errors.New("unknown terminal kind")
+	var s *termSession
+	if in.Attach != "" {
+		if s = termReg.get(in.Attach); s == nil {
+			control(map[string]any{"error": "session has ended", "gone": true})
+			ws.Close(websocket.StatusNormalClosure, "gone")
+			return
+		}
+	} else {
+		if s, err = startTermSession(in); err != nil {
+			control(map[string]any{"error": err.Error(), "auth": errors.Is(err, errSSHAuth)})
+			ws.Close(websocket.StatusNormalClosure, "failed")
+			return
+		}
+		control(map[string]any{"id": s.ID, "title": s.Title, "kind": s.Kind, "where": s.Where})
 	}
+
+	c, replay, err := s.attach()
 	if err != nil {
-		say("\x1b[31m" + err.Error() + "\x1b[0m")
-		ws.Close(websocket.StatusNormalClosure, "failed")
+		control(map[string]any{"error": err.Error(), "gone": true})
+		ws.Close(websocket.StatusNormalClosure, "gone")
 		return
 	}
-	defer p.Close()
+	s.resize(in.Cols, in.Rows)
+	if in.Attach != "" {
+		control(map[string]any{"id": s.ID, "title": s.Title, "kind": s.Kind, "where": s.Where, "replay": len(replay)})
+	}
+	if len(replay) > 0 {
+		if err := ws.Write(ctx, websocket.MessageBinary, replay); err != nil {
+			s.detach(c)
+			return
+		}
+	}
 
 	var once sync.Once
 	stop := func() { once.Do(cancel) }
-	go func() {
+	done := make(chan struct{})
+	go func() { // session → browser
+		defer close(done)
 		defer stop()
-		buf := make([]byte, 16*1024)
-		for {
-			n, err := p.Read(buf)
-			if n > 0 {
-				if werr := ws.Write(ctx, websocket.MessageBinary, buf[:n]); werr != nil {
-					return
-				}
-			}
-			if err != nil {
+		for chunk := range c.ch {
+			if err := ws.Write(ctx, websocket.MessageBinary, chunk); err != nil {
 				return
 			}
 		}
+		s.mu.Lock()
+		exited := s.exited
+		s.mu.Unlock()
+		if exited {
+			control(map[string]any{"exit": true})
+		}
 	}()
-	go func() {
+	go func() { // browser → session
 		defer stop()
 		for {
 			typ, msg, err := ws.Read(ctx)
@@ -109,251 +153,85 @@ func handleTermWS(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if typ == websocket.MessageBinary {
-				if _, err := p.Write(msg); err != nil {
+				if err := s.write(msg); err != nil {
 					return
 				}
 				continue
 			}
-			var c struct {
+			var m struct {
 				Resize *struct{ Cols, Rows int } `json:"resize"`
+				Close  bool                      `json:"close"`
 			}
-			if json.Unmarshal(msg, &c) == nil && c.Resize != nil && c.Resize.Cols > 0 && c.Resize.Rows > 0 {
-				_ = p.Resize(c.Resize.Cols, c.Resize.Rows)
+			if json.Unmarshal(msg, &m) != nil {
+				continue
+			}
+			if m.Close {
+				s.kill()
+				return
+			}
+			if m.Resize != nil {
+				s.resize(m.Resize.Cols, m.Resize.Rows)
 			}
 		}
 	}()
 	<-ctx.Done()
+	s.detach(c)
+	<-done
 	ws.Close(websocket.StatusNormalClosure, "bye")
 }
 
-// ---------------------------------------------------------------- SSH
-
-type sshTarget struct {
-	Host, User, KeyPath, Password, Passphrase string
-	Port                                      int
-}
-
-func targetFromInit(in termInit) (sshTarget, error) {
-	t := sshTarget{Host: in.Host, Port: in.Port, User: in.User, KeyPath: in.KeyPath, Password: in.Password, Passphrase: in.Passphrase}
-	if in.Profile != "" {
-		found := false
-		for _, h := range loadConfig().Hosts {
-			if h.Name == in.Profile {
-				t.Host, t.Port, t.User, t.KeyPath = h.Host, h.Port, h.User, h.KeyPath
-				found = true
-			}
+// startTermSession starts a local shell or SSH session described by in. Connection messages
+// (e.g. a host key being trusted) are put at the start of the replay buffer.
+func startTermSession(in termInit) (*termSession, error) {
+	if termReg.full() {
+		return nil, errTermFull
+	}
+	if in.Cols <= 0 || in.Cols > 1000 {
+		in.Cols = 120
+	}
+	if in.Rows <= 0 || in.Rows > 500 {
+		in.Rows = 30
+	}
+	if len(in.Cmd) > 4096 || strings.ContainsAny(in.Cmd, "\r\n\x00") {
+		return nil, errors.New("command must be a single line")
+	}
+	var lead []byte // shown through the replay right after the session starts
+	say := func(msg string) { lead = append(lead, "\x1b[33m"+msg+"\x1b[0m\r\n"...) }
+	title := termClip(strings.TrimSpace(in.Title), 80)
+	var (
+		p     ptyLike
+		where string
+		err   error
+	)
+	switch in.Kind {
+	case "local":
+		p, err = startLocal(in)
+		where = in.Cwd
+		if title == "" {
+			title = "shell"
 		}
-		if !found {
-			return t, errors.New("unknown saved host: " + in.Profile)
+	case "ssh":
+		var t sshTarget
+		if t, err = targetFromInit(in); err == nil {
+			p, err = startSSH(t, in, say)
+			where = t.label()
 		}
-	}
-	if t.Host == "" {
-		return t, errors.New("host is required")
-	}
-	if t.Port == 0 {
-		t.Port = 22
-	}
-	if t.User == "" {
-		t.User = os.Getenv("USERNAME")
-		if t.User == "" {
-			t.User = os.Getenv("USER")
+		if title == "" {
+			title = "ssh · " + where
 		}
+	default:
+		err = errors.New("unknown terminal kind")
 	}
-	return t, nil
-}
-
-func hostKeyCallback(warn func(string)) (ssh.HostKeyCallback, error) {
-	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(home, ".ssh")
-	_ = os.MkdirAll(dir, 0o700)
-	kh := filepath.Join(dir, "known_hosts")
-	if _, err := os.Stat(kh); err != nil {
-		if f, err := os.OpenFile(kh, os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-			f.Close()
-		}
-	}
-	base, err := knownhosts.New(kh)
+	s, err := termReg.start(title, in.Kind, where, p, lead)
 	if err != nil {
+		p.Close()
 		return nil, err
 	}
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		err := base(hostname, remote, key)
-		var ke *knownhosts.KeyError
-		if errors.As(err, &ke) && len(ke.Want) == 0 {
-			// Trust on first use (like StrictHostKeyChecking=accept-new); mismatches are rejected.
-			f, ferr := os.OpenFile(kh, os.O_APPEND|os.O_WRONLY, 0o600)
-			if ferr != nil {
-				return ferr
-			}
-			defer f.Close()
-			if _, werr := fmt.Fprintln(f, knownhosts.Line([]string{knownhosts.Normalize(hostname)}, key)); werr != nil {
-				return werr
-			}
-			warn("Warning: permanently added " + hostname + " to known_hosts (" + ssh.FingerprintSHA256(key) + ")")
-			return nil
-		}
-		return err
-	}, nil
-}
-
-func authMethods(t sshTarget, warn func(string)) []ssh.AuthMethod {
-	var methods []ssh.AuthMethod
-	var keyFiles []string
-	if t.KeyPath != "" {
-		keyFiles = []string{t.KeyPath}
-	} else if home, err := os.UserHomeDir(); err == nil {
-		for _, n := range []string{"id_ed25519", "id_ecdsa", "id_rsa"} {
-			keyFiles = append(keyFiles, filepath.Join(home, ".ssh", n))
-		}
-	}
-	var signers []ssh.Signer
-	for _, kf := range keyFiles {
-		b, err := os.ReadFile(kf)
-		if err != nil {
-			continue
-		}
-		var s ssh.Signer
-		if t.Passphrase != "" {
-			s, err = ssh.ParsePrivateKeyWithPassphrase(b, []byte(t.Passphrase))
-		} else {
-			s, err = ssh.ParsePrivateKey(b)
-		}
-		if err != nil {
-			var pm *ssh.PassphraseMissingError
-			if errors.As(err, &pm) {
-				warn("Key " + kf + " is passphrase-protected; supply the passphrase to use it.")
-			}
-			continue
-		}
-		signers = append(signers, s)
-	}
-	if len(signers) > 0 {
-		methods = append(methods, ssh.PublicKeys(signers...))
-	}
-	if t.Password != "" {
-		methods = append(methods, ssh.Password(t.Password))
-	}
-	return methods
-}
-
-func dialSSH(t sshTarget, warn func(string)) (*ssh.Client, error) {
-	cb, err := hostKeyCallback(warn)
-	if err != nil {
-		return nil, err
-	}
-	methods := authMethods(t, warn)
-	if len(methods) == 0 {
-		return nil, errors.New("no usable credentials: no readable private key and no password given")
-	}
-	return ssh.Dial("tcp", net.JoinHostPort(t.Host, strconv.Itoa(t.Port)), &ssh.ClientConfig{
-		User: t.User, Auth: methods, HostKeyCallback: cb, Timeout: 10 * time.Second,
-	})
-}
-
-type sshPTY struct {
-	client  *ssh.Client
-	session *ssh.Session
-	stdin   io.WriteCloser
-	stdout  io.Reader
-}
-
-func (s *sshPTY) Read(b []byte) (int, error)  { return s.stdout.Read(b) }
-func (s *sshPTY) Write(b []byte) (int, error) { return s.stdin.Write(b) }
-func (s *sshPTY) Resize(c, r int) error       { return s.session.WindowChange(r, c) }
-func (s *sshPTY) Close() error {
-	_ = s.session.Close()
-	return s.client.Close()
-}
-
-func startSSH(in termInit, say func(string)) (ptyLike, error) {
-	t, err := targetFromInit(in)
-	if err != nil {
-		return nil, err
-	}
-	client, err := dialSSH(t, say)
-	if err != nil {
-		return nil, err
-	}
-	sess, err := client.NewSession()
-	if err != nil {
-		client.Close()
-		return nil, err
-	}
-	modes := ssh.TerminalModes{ssh.ECHO: 1, ssh.TTY_OP_ISPEED: 14400, ssh.TTY_OP_OSPEED: 14400}
-	if err := sess.RequestPty("xterm-256color", in.Rows, in.Cols, modes); err != nil {
-		client.Close()
-		return nil, err
-	}
-	stdin, _ := sess.StdinPipe()
-	stdout, _ := sess.StdoutPipe()
-	if err := sess.Shell(); err != nil {
-		client.Close()
-		return nil, err
-	}
-	if in.Cmd != "" {
-		_, _ = stdin.Write([]byte(in.Cmd + "\n"))
-	}
-	return &sshPTY{client: client, session: sess, stdin: stdin, stdout: stdout}, nil
-}
-
-type limitedBuf struct {
-	bytes.Buffer
-	max int
-}
-
-func (l *limitedBuf) Write(p []byte) (int, error) {
-	if room := l.max - l.Len(); room > 0 {
-		if len(p) > room {
-			l.Buffer.Write(p[:room])
-		} else {
-			l.Buffer.Write(p)
-		}
-	}
-	return len(p), nil
-}
-
-// sshExec runs one command on a saved host using key auth (used by the MCP server).
-func sshExec(profile, command string, timeout time.Duration) (string, error) {
-	var t sshTarget
-	found := false
-	for _, h := range loadConfig().Hosts {
-		if h.Name == profile {
-			t = sshTarget{Host: h.Host, Port: h.Port, User: h.User, KeyPath: h.KeyPath}
-			found = true
-		}
-	}
-	if !found {
-		return "", errors.New("host not in saved hosts (~/.devdeck/config.json): " + profile)
-	}
-	if t.Port == 0 {
-		t.Port = 22
-	}
-	var warns []string
-	client, err := dialSSH(t, func(s string) { warns = append(warns, s) })
-	if err != nil {
-		return "", err
-	}
-	defer client.Close()
-	sess, err := client.NewSession()
-	if err != nil {
-		return "", err
-	}
-	defer sess.Close()
-	out := &limitedBuf{max: 64 * 1024}
-	sess.Stdout, sess.Stderr = out, out
-	done := make(chan error, 1)
-	go func() { done <- sess.Run(command) }()
-	select {
-	case err := <-done:
-		res := strings.Join(warns, "\n") + out.String()
-		if err != nil {
-			return res + "\n[exit: " + err.Error() + "]", nil
-		}
-		return res, nil
-	case <-time.After(timeout):
-		return out.String() + "\n[timed out]", nil
-	}
+	s.wmu.Lock()
+	s.Cols, s.Rows = in.Cols, in.Rows
+	s.wmu.Unlock()
+	return s, nil
 }

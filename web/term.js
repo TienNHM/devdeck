@@ -1,129 +1,237 @@
 'use strict';
-// Terminal tab: local / SSH terminals and saved SSH hosts. Exposes newTerm(title, init) for other modules.
+// Terminal tab: local shells and SSH sessions in xterm.js tabs. Sessions live on the server, so a
+// page reload re-attaches to them (recent output is replayed). Closing a tab ends the session.
+// Globals: newTerm(title, init) (init = {kind:'local', cwd, cmd, shell} | {kind:'ssh', profile, cmd})
+// and openSSHTerm(host, cmd). Saved hosts are managed in the SSH tab (ssh.js).
 
-let cfg = { hosts: [], redis: [], repos: [] };
-let editingHost = null;
+registerStrings('vi', {
+  'term.shell': 'Shell',
+  'term.newShell': 'Shell',
+  'term.cwd': 'Thư mục làm việc (không bắt buộc)',
+  'term.host': 'Máy chủ SSH',
+  'term.sshClaude': 'SSH + Claude',
+  'term.manageHosts': 'Quản lý máy chủ',
+  'term.empty': 'Chưa mở terminal nào. Hãy mở một shell hoặc chạy Claude trong một thư mục. Terminal vẫn chạy tiếp khi bạn tải lại trang.',
+  'term.noHosts': '(chưa có máy chủ)',
+  'term.saved': 'Đã lưu',
+  'term.config': '~/.ssh/config',
+  'term.addHost': 'Hãy thêm máy chủ trước (tab SSH)',
+  'term.connecting': 'Đang kết nối…',
+  'term.exited': '[tiến trình đã kết thúc]',
+  'term.ended': '[phiên đã kết thúc]',
+  'term.reconnecting': '[mất kết nối, đang kết nối lại…]',
+  'term.disconnected': '[đã ngắt kết nối]',
+  'term.authTitle': 'Mật khẩu cho {host}',
+  'term.authText': 'Không đăng nhập được bằng khóa hoặc ssh-agent. Nhập mật khẩu (chỉ gửi một lần, không bao giờ được lưu).',
+  'term.password': 'Mật khẩu',
+  'term.connect': 'Kết nối',
+  'term.close': 'Đóng',
+  'term.closeTitle': 'Đóng "{name}"?',
+  'term.closeText': 'Phiên terminal sẽ kết thúc và mọi chương trình đang chạy trong đó sẽ bị dừng.',
+  'term.cmdShell': 'Mở shell mới',
+  'term.cmdShellOf': 'Mở terminal {name} mới',
+  'term.cmdClaude': 'Mở terminal Claude mới',
+  'term.cmdSSH': 'SSH tới {host}',
+  'term.cmdSwitch': 'Chuyển tới terminal {name}',
+  'term.terminal': 'Terminal',
+});
 
-function renderHosts() {
-  $('#t-host').innerHTML = cfg.hosts.map(h => `<option>${esc(h.name)}</option>`).join('') || '<option value="">(no saved hosts)</option>';
-  $('#h-list').innerHTML = cfg.hosts.length ? cfg.hosts.map(h => `<tr>
-    <td><b>${esc(h.name)}</b></td><td class="mono">${esc(h.user || '')}${h.user ? '@' : ''}${esc(h.host)}:${h.port || 22}</td>
-    <td class="muted">${esc(h.keyPath || 'default keys in ~/.ssh')}</td>
-    <td class="act"><button class="btn sm" data-edit="${esc(h.name)}"><svg class="i"><use href="#i-edit"/></svg>Edit</button>
-    <button class="btn sm danger" data-del="${esc(h.name)}"><svg class="i"><use href="#i-trash"/></svg>Remove</button></td></tr>`).join('')
-    : '<tr><td class="muted">No saved hosts yet. Fill the form above and save.</td></tr>';
+let termHosts = [];
+let termShells = [];
+const termTabs = []; let termActive = null, termSeq = 0;
+const termTheme = { background: '#0b0e14', foreground: '#e6e9f0', cursor: '#e6e9f0', selectionBackground: '#33406a' };
+const termEnc = new TextEncoder();
+const termFmt = (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => v[k] ?? '');
+
+// ------------------------------------------------------------------ pickers
+async function termLoadHosts() {
+  try { termHosts = (await api('/api/ssh/hosts')).hosts || []; } catch { termHosts = []; }
+  const sel = $('#t-host'), prev = sel.value || store.get('term.host', '');
+  const saved = termHosts.filter(h => h.source === 'saved'), conf = termHosts.filter(h => h.source === 'config' && !h.shadowed);
+  const opt = h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`;
+  sel.innerHTML = !termHosts.length ? `<option value="">${esc(t('term.noHosts', '(no saved hosts)'))}</option>`
+    : (saved.length ? `<optgroup label="${esc(t('term.saved', 'Saved'))}">${saved.map(opt).join('')}</optgroup>` : '')
+    + (conf.length ? `<optgroup label="${esc(t('term.config', '~/.ssh/config'))}">${conf.map(opt).join('')}</optgroup>` : '');
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
-async function loadConfig() {
-  try { cfg = await api('/api/config'); } catch {}
-  cfg.hosts = cfg.hosts || [];
-  renderHosts();
+async function termLoadShells() {
+  try { termShells = await api('/api/term/shells'); } catch { termShells = []; }
+  const sel = $('#t-shell'), want = store.get('term.shell', '');
+  sel.innerHTML = termShells.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  if (termShells.some(s => s.id === want)) sel.value = want;
+  sel.hidden = termShells.length < 2;
+  termShells.forEach(s => registerCommand({
+    title: termFmt(t('term.cmdShellOf', 'New {name} terminal'), { name: s.name }), keywords: `terminal shell ${s.id}`,
+    run: () => { show('term'); newTerm(s.name, { kind: 'local', cwd: $('#t-cwd').value.trim(), shell: s.id }); },
+  }));
 }
-// Re-read the config right before writing so changes made elsewhere (e.g. saved repos) are not overwritten.
-async function saveHosts(hosts) {
-  const fresh = await api('/api/config');
-  fresh.hosts = hosts;
-  cfg = await put('/api/config', fresh);
-  cfg.hosts = cfg.hosts || [];
-  renderHosts();
-}
-function resetHostForm() {
-  editingHost = null;
-  ['#h-name', '#h-host', '#h-port', '#h-user', '#h-key'].forEach(s => $(s).value = '');
-  $('#h-title').textContent = 'SSH hosts'; $('#h-save').textContent = 'Save host'; $('#h-cancel').hidden = true;
-}
-$('#t-hosts').onclick = () => { const e = $('#hosts-edit'); e.hidden = !e.hidden; if (!e.hidden) loadConfig(); };
-$('#h-cancel').onclick = resetHostForm;
-$('#h-save').onclick = async () => {
-  const name = $('#h-name').value.trim(), host = $('#h-host').value.trim();
-  const port = $('#h-port').value.trim() === '' ? 22 : +$('#h-port').value;
-  if (!name || !host) return toast('Name and host are required', 'err');
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return toast('Port must be 1-65535', 'err');
-  if (name !== editingHost && cfg.hosts.some(h => h.name === name)) {
-    const ok = await dialog({ title: `Replace "${name}"?`, text: 'A host with this name already exists and will be overwritten.', ok: 'Replace', danger: true });
-    if (!ok) return;
-  }
-  const entry = { name, host, port, user: $('#h-user').value.trim(), keyPath: $('#h-key').value.trim() };
-  const hosts = cfg.hosts.filter(h => h.name !== editingHost && h.name !== name).concat(entry);
-  try { await saveHosts(hosts); toast(editingHost ? `Updated ${name}` : `Saved ${name}`); resetHostForm(); } catch (e) { toast(e.message, 'err'); }
-};
-$('#h-list').onclick = async e => {
-  const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
-  if (ed) {
-    const h = cfg.hosts.find(x => x.name === ed.dataset.edit); if (!h) return;
-    editingHost = h.name;
-    $('#h-name').value = h.name; $('#h-host').value = h.host; $('#h-port').value = h.port || 22; $('#h-user').value = h.user || ''; $('#h-key').value = h.keyPath || '';
-    $('#h-title').textContent = `Editing "${h.name}"`; $('#h-save').textContent = 'Update host'; $('#h-cancel').hidden = false;
-    $('#h-name').focus();
-  } else if (del) {
-    const n = del.dataset.del;
-    const ok = await dialog({ title: `Remove "${n}"?`, text: 'Only the saved entry is removed. The server itself is not touched.', ok: 'Remove', danger: true });
-    if (!ok) return;
-    try { await saveHosts(cfg.hosts.filter(h => h.name !== n)); if (editingHost === n) resetHostForm(); toast(`Removed ${n}`); } catch (err) { toast(err.message, 'err'); }
-  }
-};
+$('#t-shell').onchange = e => store.set('term.shell', e.target.value);
+$('#t-host').onchange = e => store.set('term.host', e.target.value);
+document.addEventListener('devdeck:hosts', termLoadHosts);
 
 // ------------------------------------------------------------------ terminals
-const terms = []; let activeTerm = null, tcount = 0;
-const xtermTheme = { background: '#0b0e14', foreground: '#e6e9f0', cursor: '#e6e9f0', selectionBackground: '#33406a' };
-function newTerm(title, init) {
-  const id = ++tcount, pane = document.createElement('div');
+function termMakeTab(title) {
+  const pane = document.createElement('div');
   pane.className = 'tpane'; $('#t-area').appendChild(pane);
-  const term = new Terminal({ fontSize: 13, fontFamily: '"Cascadia Code", Consolas, ui-monospace, monospace', cursorBlink: true, theme: xtermTheme, scrollback: 3000 });
+  const term = new Terminal({ fontSize: 13, fontFamily: '"Cascadia Code", Consolas, ui-monospace, monospace', cursorBlink: true, theme: termTheme, scrollback: 5000 });
   const fit = new FitAddon.FitAddon(); term.loadAddon(fit); term.open(pane);
-  const tt = { id, title, pane, term, fit, ws: null };
-  terms.push(tt); selectTerm(tt);
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws/term`); ws.binaryType = 'arraybuffer'; tt.ws = ws;
-  ws.onopen = () => { fit.fit(); ws.send(JSON.stringify({ ...init, cols: term.cols, rows: term.rows })); term.focus(); };
-  ws.onmessage = e => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data));
-  ws.onclose = () => term.write('\r\n\x1b[90m[disconnected]\x1b[0m\r\n');
-  const enc = new TextEncoder();
-  term.onData(d => ws.readyState === 1 && ws.send(enc.encode(d)));
-  term.onResize(({ cols, rows }) => ws.readyState === 1 && ws.send(JSON.stringify({ resize: { cols, rows } })));
+  const tt = { id: ++termSeq, title, pane, term, fit, ws: null, sid: null, init: null, exited: false, closing: false, retries: 0 };
+  term.onData(d => tt.ws && tt.ws.readyState === 1 && tt.ws.send(termEnc.encode(d)));
+  term.onResize(({ cols, rows }) => tt.ready && tt.ws.readyState === 1 && tt.ws.send(JSON.stringify({ resize: { cols, rows } })));
+  termTabs.push(tt);
   return tt;
 }
-function selectTerm(tt) { activeTerm = tt; terms.forEach(x => x.pane.classList.toggle('on', x === tt)); renderTermTabs(); requestAnimationFrame(() => { tt.fit.fit(); tt.term.focus(); }); }
-function closeTerm(tt) {
-  tt.ws && tt.ws.close(); tt.term.dispose(); tt.pane.remove();
-  terms.splice(terms.indexOf(tt), 1);
-  if (activeTerm === tt) activeTerm = terms[terms.length - 1] || null;
-  activeTerm ? selectTerm(activeTerm) : renderTermTabs();
+const termVisible = tt => current === 'term' && tt.pane.classList.contains('on') && tt.pane.offsetWidth > 0;
+const termNote = (tt, s) => tt.term.write(`\r\n\x1b[90m${s}\x1b[0m\r\n`);
+
+// termConnect opens a socket and either starts a session (msg = init) or attaches (msg = {attach}).
+function termConnect(tt, msg) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/term`); ws.binaryType = 'arraybuffer'; tt.ws = ws; tt.ready = false;
+  let opened = false;
+  ws.onopen = () => {
+    opened = true;
+    const size = termVisible(tt) ? (tt.fit.fit(), { cols: tt.term.cols, rows: tt.term.rows }) : {};
+    ws.send(JSON.stringify({ ...msg, ...size })); // the first frame must be the init / attach message
+    tt.ready = true;
+  };
+  ws.onmessage = async e => {
+    if (typeof e.data !== 'string') { tt.term.write(new Uint8Array(e.data)); return; }
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.id) {
+      tt.sid = m.id; tt.retries = 0;
+      if (m.title && !tt.title) tt.title = m.title;
+      if ('replay' in m) tt.term.reset(); // an attach replays the whole buffer
+      termRenderTabs();
+    }
+    if (m.exit) { tt.exited = true; termNote(tt, t('term.exited', '[process exited]')); termRenderTabs(); }
+    if (m.error) {
+      tt.closing = true; // this socket is done either way
+      if (m.auth && tt.init && tt.init.kind === 'ssh' && !tt.init.password) {
+        const host = tt.init.profile || tt.init.host;
+        termNote(tt, m.error);
+        const pw = await dialog({ title: termFmt(t('term.authTitle', 'Password for {host}'), { host }), text: t('term.authText', 'Key and ssh-agent login failed. Enter the password (sent once, never saved).'), input: t('term.password', 'Password'), ok: t('term.connect', 'Connect') });
+        if (pw) { tt.closing = false; tt.init = { ...tt.init, password: pw }; termNote(tt, t('term.connecting', 'Connecting…')); termConnect(tt, tt.init); tt.init = { ...tt.init, password: '' }; return; }
+      }
+      tt.exited = true;
+      tt.term.write(`\r\n\x1b[31m${m.error}\x1b[0m\r\n`);
+      if (m.gone) termNote(tt, t('term.ended', '[session ended]'));
+      termRenderTabs();
+    }
+  };
+  ws.onclose = () => {
+    if (tt.ws !== ws || tt.closing || tt.exited || stopped) return;
+    if (tt.sid && opened && tt.retries < 5) { // server still has the session: re-attach
+      tt.retries++;
+      termNote(tt, t('term.reconnecting', '[connection lost, reconnecting…]'));
+      setTimeout(() => { if (!tt.closing && !tt.exited && termTabs.includes(tt)) termConnect(tt, { attach: tt.sid }); }, 500 * 2 ** tt.retries);
+    } else { tt.exited = true; termNote(tt, t('term.disconnected', '[disconnected]')); termRenderTabs(); }
+  };
 }
-function renderTermTabs() {
+
+function newTerm(title, init) {
+  const tt = termMakeTab(title);
+  tt.init = { ...init, title };
+  termSelect(tt);
+  if (init && init.kind === 'ssh') tt.term.write(`\x1b[90m${t('term.connecting', 'Connecting…')}\x1b[0m\r\n`);
+  termConnect(tt, tt.init);
+  if (tt.init.password) tt.init = { ...tt.init, password: '' }; // keep no secret around
+  return tt;
+}
+function openSSHTerm(host, cmd = '') {
+  if (!host) { toast(t('term.addHost', 'Add a host first (SSH tab)'), 'err'); return null; }
+  show('term');
+  return newTerm((cmd ? 'ssh claude · ' : 'ssh · ') + host, { kind: 'ssh', profile: host, cmd });
+}
+function termAttach(s) {
+  const tt = termMakeTab(s.title);
+  tt.sid = s.id; tt.init = { kind: s.kind };
+  if (s.cols > 0 && s.rows > 0) tt.term.resize(s.cols, s.rows); // replay at the size the output was drawn for
+  termConnect(tt, { attach: s.id });
+  return tt;
+}
+
+function termSelect(tt) {
+  termActive = tt;
+  termTabs.forEach(x => x.pane.classList.toggle('on', x === tt));
+  termRenderTabs();
+  requestAnimationFrame(() => { if (termVisible(tt)) { tt.fit.fit(); tt.term.focus(); } });
+}
+function termDispose(tt) {
+  tt.closing = true;
+  try { tt.ws && tt.ws.close(); } catch {}
+  tt.term.dispose(); tt.pane.remove();
+  termTabs.splice(termTabs.indexOf(tt), 1);
+  if (termActive === tt) termActive = termTabs[termTabs.length - 1] || null;
+  termActive ? termSelect(termActive) : termRenderTabs();
+}
+// termKill ends the server session (explicit close), then removes the tab.
+function termKill(tt) {
+  if (tt.sid && !tt.exited) {
+    if (tt.ws && tt.ws.readyState === 1) tt.ws.send(JSON.stringify({ close: true }));
+    else fetch('/api/term/sessions/' + encodeURIComponent(tt.sid), { method: 'DELETE' }).catch(() => {});
+  }
+  termDispose(tt);
+}
+async function termClose(tt) {
+  if (tt.sid && !tt.exited) {
+    const ok = await dialog({ title: termFmt(t('term.closeTitle', 'Close "{name}"?'), { name: tt.title }), text: t('term.closeText', 'The terminal session ends and anything running in it is stopped.'), ok: t('term.close', 'Close'), danger: true });
+    if (!ok) return;
+  }
+  termKill(tt);
+}
+function termRenderTabs() {
   const bar = $('#t-tabs'); bar.innerHTML = '';
-  terms.forEach(tt => {
-    const s = document.createElement('span'); s.className = 'ttab' + (tt === activeTerm ? ' on' : ''); s.textContent = tt.title;
-    s.onclick = () => selectTerm(tt);
-    const x = document.createElement('a'); x.href = '#'; x.textContent = '×'; x.title = 'Close'; x.onclick = e => { e.preventDefault(); e.stopPropagation(); closeTerm(tt); };
+  termTabs.forEach(tt => {
+    const s = document.createElement('span'); s.className = 'ttab' + (tt === termActive ? ' on' : '') + (tt.exited ? ' term-dead' : '');
+    const label = document.createElement('span'); label.textContent = tt.title; s.appendChild(label);
+    s.title = tt.title; s.onclick = () => termSelect(tt);
+    const x = document.createElement('a'); x.href = '#'; x.textContent = '×'; x.title = t('term.close', 'Close');
+    x.onclick = e => { e.preventDefault(); e.stopPropagation(); termClose(tt); };
     s.appendChild(x); bar.appendChild(s);
   });
-  $('#t-empty').hidden = terms.length > 0;
+  $('#t-empty').hidden = termTabs.length > 0;
 }
-function fitActive() { if (activeTerm) requestAnimationFrame(() => activeTerm.fit.fit()); }
-window.addEventListener('resize', fitActive);
-onTab('term', () => { loadConfig(); fitActive(); });
-termCount = () => terms.length;
-beforeQuit.push(() => terms.slice().forEach(closeTerm));
+function termFitActive() { if (termActive) requestAnimationFrame(() => { if (termVisible(termActive)) termActive.fit.fit(); }); }
+window.addEventListener('resize', termFitActive);
+onTab('term', () => { termLoadHosts(); termFitActive(); if (termActive) requestAnimationFrame(() => termActive.term.focus()); });
+termCount = () => termTabs.filter(x => !x.exited).length;
+beforeQuit.push(() => termTabs.slice().forEach(termKill));
 
-const cwd = () => $('#t-cwd').value.trim();
-$('#t-local').onclick = () => newTerm('shell', { kind: 'local', cwd: cwd() });
-$('#t-claude').onclick = () => newTerm('claude', { kind: 'local', cwd: cwd(), cmd: 'claude' });
-async function sshInit(cmd, profile = $('#t-host').value) {
-  if (!profile) { toast('Add a host first (Manage hosts)', 'err'); return null; }
-  const pw = await dialog({ title: `Connect to ${profile}`, text: 'Password (leave empty to use your SSH key). It is sent once and never saved.', input: 'Password', ok: 'Connect' });
-  if (pw === null) return null;
-  return { kind: 'ssh', profile, password: pw, cmd };
+// Re-attach to sessions that are still running on the server (page reload, second window).
+async function termRestore() {
+  let list = [];
+  try { list = await api('/api/term/sessions'); } catch { return; }
+  list.forEach(s => { if (!termTabs.some(x => x.sid === s.id)) termAttach(s); });
+  if (termTabs.length && !termActive) termSelect(termTabs[termTabs.length - 1]); else termRenderTabs();
 }
-$('#t-ssh').onclick = async () => { const i = await sshInit(''); if (i) newTerm('ssh · ' + i.profile, i); };
-$('#t-sshclaude').onclick = async () => { const i = await sshInit('claude'); if (i) newTerm('ssh claude · ' + i.profile, i); };
 
-registerCommand({ title: 'New local shell', keywords: 'terminal powershell', run: () => { show('term'); $('#t-local').click(); } });
-registerCommand({ title: 'New Claude terminal', keywords: 'claude code ai', run: () => { show('term'); $('#t-claude').click(); } });
+// ------------------------------------------------------------------ toolbar + palette
+const termCwd = () => $('#t-cwd').value.trim();
+const termShellName = () => (termShells.find(s => s.id === $('#t-shell').value) || {}).name || 'shell';
+$('#t-local').onclick = () => newTerm(termShellName(), { kind: 'local', cwd: termCwd(), shell: $('#t-shell').value });
+$('#t-claude').onclick = () => newTerm('claude', { kind: 'local', cwd: termCwd(), cmd: 'claude', shell: $('#t-shell').value });
+$('#t-ssh').onclick = () => openSSHTerm($('#t-host').value);
+$('#t-sshclaude').onclick = () => openSSHTerm($('#t-host').value, 'claude');
+$('#t-hosts').onclick = () => { show('ssh'); document.dispatchEvent(new CustomEvent('devdeck:ssh-sub', { detail: 'hosts' })); };
+
+registerCommand({ title: t('term.cmdShell', 'New local shell'), keywords: 'terminal powershell bash zsh', run: () => { show('term'); $('#t-local').click(); } });
+registerCommand({ title: t('term.cmdClaude', 'New Claude terminal'), keywords: 'claude code ai', run: () => { show('term'); $('#t-claude').click(); } });
 registerCommandProvider(async q => {
-  if (!q.startsWith('ssh')) return [];
-  if (!cfg.hosts.length) await loadConfig();
-  const f = q.slice(3).trim();
-  return cfg.hosts.filter(h => !f || h.name.toLowerCase().includes(f)).map(h => ({
-    title: `SSH to ${h.name}`, hint: `${h.user || ''}@${h.host}`, run: async () => { show('term'); const i = await sshInit('', h.name); if (i) newTerm('ssh · ' + h.name, i); },
-  }));
+  const out = [];
+  if (q.startsWith('ssh')) {
+    if (!termHosts.length) await termLoadHosts();
+    const f = q.slice(3).trim();
+    termHosts.filter(h => !h.shadowed && (!f || h.name.toLowerCase().includes(f))).forEach(h => out.push({
+      title: termFmt(t('term.cmdSSH', 'SSH to {host}'), { host: h.name }), hint: `${h.user ? h.user + '@' : ''}${h.host}`, run: () => openSSHTerm(h.name),
+    }));
+  }
+  if (q.startsWith('term') || q.startsWith('tab')) {
+    termTabs.forEach(tt => out.push({ title: termFmt(t('term.cmdSwitch', 'Switch to terminal {name}'), { name: tt.title }), hint: t('term.terminal', 'Terminal'), run: () => { show('term'); termSelect(tt); } }));
+  }
+  return out;
 });
+
+termLoadShells();
+termLoadHosts();
+termRestore();
