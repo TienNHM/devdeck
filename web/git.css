@@ -1,0 +1,185 @@
+/* Git tab (owned by the git-graph work). Everything is prefixed gg- to stay out of the shared styles. */
+#toasts{z-index:200}
+.gg{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.gg-bar select{max-width:360px;min-width:180px}
+.gg-bar .sp{flex:1}
+#gg-op{display:inline-flex;gap:6px;align-items:center}
+.gg-split{flex:1;min-height:0;display:flex}
+.gg-split.dock-bottom{flex-direction:column}
+.gg-split.dock-right{flex-direction:row}
+.gg-main{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.gg-gutter{flex-shrink:0;background:transparent;position:relative}
+.dock-bottom .gg-gutter{height:10px;cursor:row-resize}
+.dock-right .gg-gutter{width:10px;cursor:col-resize}
+.gg-gutter:after{content:"";position:absolute;background:var(--line);border-radius:2px}
+.dock-bottom .gg-gutter:after{left:45%;right:45%;top:4px;height:3px}
+.dock-right .gg-gutter:after{top:45%;bottom:45%;left:4px;width:3px}
+.gg-gutter:hover:after{background:var(--acc)}
+.gg-det{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;flex-shrink:0}
+.dock-bottom .gg-det{width:auto}
+
+/* graph table */
+.gg-head,.gg-row{display:grid;grid-template-columns:var(--gg-cols,60px 1fr 150px 140px 76px);align-items:center}
+.gg-head{padding:0 6px 0 0;border-bottom:1px solid var(--line);background:var(--surface);color:var(--mut);font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;height:30px;flex-shrink:0}
+.gg-head>div{position:relative;padding:0 8px;overflow:hidden;white-space:nowrap}
+.gg-head .rz{position:absolute;left:-3px;top:4px;bottom:4px;width:7px;cursor:col-resize}
+.gg-head .rz:after{content:"";position:absolute;left:3px;top:0;bottom:0;width:1px;background:var(--line)}
+.gg-head .rz:hover:after{background:var(--acc);width:2px}
+.gg-scroll{flex:1;min-height:0;overflow:auto;position:relative;scrollbar-gutter:stable}
+.gg-rows{position:relative;min-width:100%}
+.gg-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
+.gg-svg path{fill:none;stroke-width:2;stroke-linecap:round}
+.gg-v{stroke:var(--surface);stroke-width:1.6;pointer-events:auto;cursor:pointer}
+.gg-v.head{stroke:var(--fg);stroke-width:2.4}
+.gg-v.unc{fill:var(--surface);stroke-width:2;stroke-dasharray:2.5 2}
+.gg-v.stash{fill:var(--surface);stroke-width:2.2}
+.gg-row{height:26px;padding-right:6px;cursor:default;position:relative}
+.gg-row>div{padding:0 8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.gg-row .c-graph{padding:0}
+.gg-row .c-desc{display:flex;align-items:center;gap:4px;z-index:2}
+.gg-row .c-date,.gg-row .c-author{color:var(--mut)}
+.gg-row .c-hash{font:12px "Cascadia Code",ui-monospace,Consolas,monospace;color:var(--mut)}
+.gg-row:hover{background:var(--surface2)}
+.gg-row.sel{background:var(--acc-soft)}
+.gg-row.mu .gg-msg,.gg-row.mu .c-date,.gg-row.mu .c-author,.gg-row.mu .c-hash{opacity:.5}
+.gg-row.found{background:var(--warn-soft)}
+.gg-row.fcur{outline:2px solid var(--warn);outline-offset:-2px}
+.gg-row.flash{animation:ggflash 1.4s ease-out}
+@keyframes ggflash{0%,60%{background:var(--acc-soft);outline:2px solid var(--acc);outline-offset:-2px}100%{outline-color:transparent}}
+.gg-msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.gg-msg code{font-size:11.5px}
+.gg-msg a{text-decoration:underline}
+.unc-msg{color:var(--mut);font-style:italic}
+.gg-foot{padding:10px;text-align:center}
+.gg-foot:empty{display:none}
+
+/* reference labels */
+.gg-ref{--c:var(--acc);display:inline-flex;align-items:center;flex-shrink:0;font-size:11px;font-weight:600;line-height:18px;padding:0 7px;border-radius:999px;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent);border:1px solid color-mix(in srgb,var(--c) 55%,transparent);cursor:default}
+.gg-ref.cur{background:var(--c);color:#fff;border-color:var(--c)}
+.gg-ref b{font-weight:700}
+.gg-ref em{font-style:normal;opacity:.9;border-left:1px solid currentColor;margin-left:6px;padding-left:6px;font-weight:500}
+.gg-ref.remote{--c:var(--mut);background:var(--surface2);border-color:var(--line)}
+.gg-ref.tag{--c:var(--warn);background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.gg-ref.stash{--c:var(--mut);background:transparent;border-style:dashed}
+
+/* busy overlay */
+.gg-busy{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--surface) 72%,transparent);font-weight:600}
+.gg-busy[hidden]{display:none}
+.gg-spin{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:ggspin .8s linear infinite}
+@keyframes ggspin{to{transform:rotate(360deg)}}
+
+/* find */
+.gg-findbar{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--surface2)}
+.gg-findbar[hidden]{display:none}
+.gg-findbar input{flex:1}
+
+/* details */
+.gg-dh{position:relative;padding:10px 90px 10px 14px;border-bottom:1px solid var(--line);max-height:46%;overflow:auto;flex-shrink:0}
+.gg-dact{position:absolute;top:8px;right:10px;display:flex;gap:6px}
+.gg-dtitle{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.gg-dmeta{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin-top:6px;font-size:12.5px}
+.gg-dmeta>span:nth-child(odd){color:var(--mut)}
+.gg-dmeta .gg-ref{margin-right:4px}
+.gg-dbody{margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--fg);opacity:.9}
+.gg-ftool{display:flex;gap:10px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
+.gg-ftool .sp{flex:1}
+.gg-ftool .a,.gg-file .a{color:var(--ok)}
+.gg-ftool .d,.gg-file .d{color:var(--bad)}
+.gg-ftool .hid{display:none}
+.seg{display:inline-flex}
+.seg .btn{border-radius:0;box-shadow:none}
+.seg .btn:first-child{border-radius:8px 0 0 8px}
+.seg .btn:last-child{border-radius:0 8px 8px 0;border-left:0}
+.seg .btn.on{background:var(--acc-soft);color:var(--acc);border-color:var(--acc)}
+.gg-files{flex:1;min-height:0;overflow:auto;padding:4px 0}
+.gg-file,.gg-dir{display:flex;align-items:center;gap:8px;padding:2px 12px 2px calc(12px + var(--d,0) * 16px);cursor:pointer;white-space:nowrap}
+.gg-file:hover,.gg-dir:hover{background:var(--surface2)}
+.gg-dir{color:var(--mut);font-weight:600}
+.gg-dir i{font-style:normal;width:12px;font-size:11px}
+.gg-file .fn{flex:1;overflow:hidden;text-overflow:ellipsis}
+.gg-file .fs{display:flex;gap:6px;font-size:12px;font-variant-numeric:tabular-nums}
+.gg-file.todo .fn{font-weight:700}
+.st{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;font-size:11px;font-weight:700;flex-shrink:0;background:var(--surface2);color:var(--mut)}
+.st-A{background:var(--ok-soft);color:var(--ok)}
+.st-M{background:var(--warn-soft);color:var(--warn)}
+.st-D,.st-x{background:var(--bad-soft);color:var(--bad)}
+.st-R,.st-C{background:var(--acc-soft);color:var(--acc)}
+.st-U{background:var(--surface2);color:var(--mut)}
+
+/* modals */
+.gg-modal{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:rgba(10,12,20,.5);backdrop-filter:blur(2px)}
+.gg-mbox{width:min(480px,92vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.gg-mbox.wide{width:min(760px,94vw)}
+.gg-mbox.xl{width:min(1280px,96vw);height:88vh}
+.gg-form{display:flex;flex-direction:column;gap:12px;padding:18px 20px;overflow:auto}
+.gg-form h3{margin:0;font-size:16px;font-weight:700}
+.gg-intro{color:var(--mut);overflow-wrap:anywhere}
+.gg-fields{display:flex;flex-direction:column;gap:10px}
+.gg-form .f{display:flex;flex-direction:column;gap:4px}
+.gg-form .f>span{color:var(--mut);font-size:12px;font-weight:600}
+.gg-form .f[hidden]{display:none}
+.gg-form .chk{display:flex;align-items:baseline;gap:7px;flex-direction:row;font-weight:400}
+.gg-form .f.chk>span{color:var(--fg);font-size:13px;font-weight:400}
+.gg-form .hint{color:var(--mut);font-size:12px;font-weight:400}
+.gg-form textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:6px 10px;resize:vertical;outline:none}
+.gg-form textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.gg-err{color:var(--bad);font-weight:600}
+.gg-err[hidden]{display:none}
+.gg-factions{display:flex;gap:8px;margin-top:4px}
+.gg-out{max-height:48vh;overflow:auto;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:10px;white-space:pre-wrap;word-break:break-word;font:12px/1.5 "Cascadia Code",ui-monospace,Consolas,monospace}
+.gg-mh{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex-shrink:0;min-width:0}
+.gg-mh b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gg-mh .sp{flex:1}
+.gg-mb{flex:1;min-height:0;overflow:auto}
+.gg-mb.pad{padding:14px 18px}
+.gg-mfoot{padding:8px 16px;border-top:1px solid var(--line);font-size:12px;flex-shrink:0}
+.gg-tabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);flex-shrink:0}
+.gg-tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--mut);padding:8px 12px;cursor:pointer;font:inherit;font-weight:600}
+.gg-tabs button.on{color:var(--acc);border-bottom-color:var(--acc)}
+.gg-toolrow{display:flex;gap:8px;margin:10px 0}
+.gg-mb .f{display:flex;flex-direction:column;gap:4px;margin:10px 0}
+.gg-mb .f>span{color:var(--mut);font-size:12px;font-weight:600}
+.gg-tbl{width:100%;border-collapse:collapse}
+.gg-tbl th,.gg-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:normal;word-break:break-all}
+.gg-tbl td.act{white-space:nowrap;text-align:right}
+.gg-tbl td.act .btn{margin-left:4px}
+
+/* diff */
+.gg-diff{width:max-content;min-width:100%;font:12.5px/1.55 "Cascadia Code",ui-monospace,Consolas,monospace}
+.gg-diff .dl{display:grid;grid-template-columns:56px 56px 1fr}
+.gg-diff .ln{color:var(--mut);text-align:right;padding:0 10px;user-select:none;opacity:.8}
+.gg-diff .tx{white-space:pre;padding:0 10px}
+.gg-diff .dl.add{background:var(--ok-soft)}
+.gg-diff .dl.del{background:var(--bad-soft)}
+.gg-diff .hunk{background:var(--acc-soft);color:var(--acc)}
+.gg-diff .dl.meta{color:var(--mut)}
+.gg-diff .dl.add .ln{background:color-mix(in srgb,var(--ok) 18%,transparent)}
+.gg-diff .dl.del .ln{background:color-mix(in srgb,var(--bad) 18%,transparent)}
+.gg-diff.split{width:100%;min-width:100%}
+.gg-diff .sl{display:grid;grid-template-columns:52px minmax(0,1fr) 52px minmax(0,1fr)}
+.gg-diff .sl.hunk{grid-template-columns:1fr;padding:0}
+.gg-diff .sl .tx{white-space:pre-wrap;word-break:break-all}
+.gg-diff .sl .tx.add{background:var(--ok-soft)}
+.gg-diff .sl .tx.del{background:var(--bad-soft)}
+.gg-diff .sl .tx.emp{background:var(--surface2)}
+.gg-diff .sl .ln:nth-child(3){border-left:1px solid var(--line)}
+pre.plain{margin:10px;white-space:pre-wrap;text-align:left}
+
+/* menus, dropdowns, tooltip */
+.gg-menu{position:fixed;z-index:150;min-width:260px;padding:4px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.28)}
+.gg-menu .mi{padding:5px 12px;border-radius:6px;cursor:pointer;white-space:pre}
+.gg-menu .mi:hover{background:var(--acc-soft)}
+.gg-menu .mi.dis{opacity:.4;pointer-events:none}
+.gg-menu .mi.dg{color:var(--bad)}
+.gg-menu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.gg-dd{position:fixed;z-index:140;min-width:280px;max-width:420px;max-height:70vh;display:flex;flex-direction:column;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.28)}
+.gg-dd .dd-h{padding:8px;border-bottom:1px solid var(--line)}
+.gg-dd .dd-s{width:100%}
+.gg-dd .dd-list{overflow:auto;padding:4px}
+.gg-dd .dd-t{padding:6px 10px 2px;color:var(--mut);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.gg-dd .dd-i{display:flex;align-items:center;gap:8px;padding:4px 10px;border-radius:6px;cursor:pointer}
+.gg-dd .dd-i:hover{background:var(--surface2)}
+.gg-dd .dd-i.sel{justify-content:space-between}
+.gg-dd .dd-i select{padding:2px 6px}
+.gg-tip{position:fixed;z-index:160;max-width:380px;padding:8px 10px;border-radius:9px;background:var(--fg);color:var(--bg);font-size:12px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.3);pointer-events:none;overflow-wrap:anywhere}
+.gg-tip .muted{color:inherit;opacity:.7}

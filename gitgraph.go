@@ -1,75 +1,268 @@
 package main
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
-	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
+type GRef struct {
+	Name string `json:"n"`
+	Type string `json:"t"` // head | remote | tag | stash | detached
+	Head bool   `json:"h,omitempty"`
+}
+
 type GraphRow struct {
 	Hash    string   `json:"h"`
 	Parents []string `json:"p"`
 	Author  string   `json:"a"`
-	Time    int64    `json:"t"`
-	Refs    []string `json:"r,omitempty"`
+	Email   string   `json:"e,omitempty"`
+	Time    int64    `json:"at"` // author time
+	CTime   int64    `json:"ct"` // committer time
+	Refs    []string `json:"-"`  // plain names, used by the MCP ASCII graph
+	RefInfo []GRef   `json:"r,omitempty"`
 	Subject string   `json:"s"`
 	Col     int      `json:"col"`
-	Pass    []int    `json:"pass"` // lanes passing straight through this row
-	Conv    []int    `json:"conv"` // lanes converging into this commit from above
-	Out     []int    `json:"out"`  // lanes the parents occupy below this commit
+	Pass    []int    `json:"pass,omitempty"` // lanes passing straight through this row
+	Conv    []int    `json:"conv,omitempty"` // lanes converging into this commit from above
+	Out     []int    `json:"out,omitempty"`  // lanes the parents occupy below this commit
+	InHead  bool     `json:"ih,omitempty"`
+	Stash   string   `json:"st,omitempty"`
+	Changes int      `json:"un,omitempty"` // Hash == "*": number of uncommitted changes
 }
 
 type GraphResult struct {
 	Rows     []GraphRow `json:"rows"`
 	Lanes    int        `json:"lanes"`
 	Branch   string     `json:"branch"`
+	Head     string     `json:"head"`
 	Dirty    bool       `json:"dirty"`
 	Truncate bool       `json:"truncated"`
 }
 
-var hashRe = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
-
-func git(repo string, timeout time.Duration, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", append([]string{"-C", repo, "-c", "core.quotepath=false"}, args...)...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			return nil, fmt.Errorf("git %s: %v: %s", args[0], err, strings.TrimSpace(errb.String()))
-		}
-		return out.Bytes(), nil
-	case <-time.After(timeout):
-		_ = cmd.Process.Kill()
-		return nil, errors.New("git timed out")
-	}
+type GraphOpts struct {
+	Limit           int
+	Selectors       []string // full ref names (refs/heads/x) or "glob:<pattern>"; empty = all
+	ShowRemote      bool
+	ShowTags        bool
+	ShowStashes     bool
+	ShowUncommitted bool
+	FirstParent     bool
+	Order           string
+	InHead          bool
 }
 
+// gitGraph is the simple entry point used by the MCP tools and the legacy route.
 func gitGraph(repo string, limit int) (*GraphResult, error) {
-	if limit <= 0 || limit > 5000 {
-		limit = 300
+	return gitGraphOpts(repo, GraphOpts{Limit: limit, ShowRemote: true, ShowTags: true})
+}
+
+func countChanges(repo string) int {
+	out, _, err := runGit(repo, 20*time.Second, 4<<20, nil, "status", "--porcelain=v1", "-z", "--untracked-files=normal")
+	if err != nil {
+		return 0
 	}
-	out, err := git(repo, 20*time.Second, "log", "--all", "--topo-order",
-		"-n", strconv.Itoa(limit+1),
-		"--format=%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%s")
+	n := 0
+	toks := strings.Split(string(out), "\x00")
+	for i := 0; i < len(toks); i++ {
+		t := toks[i]
+		if len(t) < 3 {
+			continue
+		}
+		n++
+		if t[0] == 'R' || t[0] == 'C' || t[1] == 'R' || t[1] == 'C' {
+			i++ // rename/copy records carry the old path as an extra token
+		}
+	}
+	return n
+}
+
+func parseDecorations(d string, o GraphOpts) (refs []GRef, plain []string) {
+	if d == "" {
+		return
+	}
+	for _, it := range strings.Split(d, ", ") {
+		it = strings.TrimSpace(it)
+		switch {
+		case it == "HEAD":
+			refs = append(refs, GRef{Name: "HEAD", Type: "detached", Head: true})
+			plain = append(plain, "HEAD")
+		case strings.HasPrefix(it, "HEAD -> refs/heads/"):
+			n := strings.TrimPrefix(it, "HEAD -> refs/heads/")
+			refs = append(refs, GRef{Name: n, Type: "head", Head: true})
+			plain = append(plain, "HEAD -> "+n)
+		case strings.HasPrefix(it, "refs/heads/"):
+			n := strings.TrimPrefix(it, "refs/heads/")
+			refs = append(refs, GRef{Name: n, Type: "head"})
+			plain = append(plain, n)
+		case strings.HasPrefix(it, "refs/remotes/"):
+			if !o.ShowRemote || strings.HasSuffix(it, "/HEAD") {
+				continue
+			}
+			n := strings.TrimPrefix(it, "refs/remotes/")
+			refs = append(refs, GRef{Name: n, Type: "remote"})
+			plain = append(plain, n)
+		case strings.HasPrefix(it, "tag: refs/tags/"):
+			if !o.ShowTags {
+				continue
+			}
+			n := strings.TrimPrefix(it, "tag: refs/tags/")
+			refs = append(refs, GRef{Name: n, Type: "tag"})
+			plain = append(plain, "tag: "+n)
+		}
+	}
+	return
+}
+
+func gitGraphOpts(repoIn string, o GraphOpts) (*GraphResult, error) {
+	repo, err := cleanRepo(repoIn)
 	if err != nil {
 		return nil, err
 	}
-	res := &GraphResult{}
-	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-	if len(lines) > limit {
-		lines, res.Truncate = lines[:limit], true
+	if o.Limit <= 0 || o.Limit > 20000 {
+		o.Limit = 300
 	}
+	flag, ok := validOrders[o.Order]
+	if !ok {
+		flag = validOrders["date"]
+	}
+	headHash := revParse(repo, "HEAD")
+
+	var revs []string
+	if len(o.Selectors) == 0 {
+		revs = append(revs, "--branches")
+		if o.ShowRemote {
+			revs = append(revs, "--remotes")
+		}
+		if o.ShowTags {
+			revs = append(revs, "--tags")
+		}
+		if headHash != "" {
+			revs = append(revs, "HEAD")
+		}
+	} else {
+		for _, s := range o.Selectors {
+			switch {
+			case strings.HasPrefix(s, "glob:"):
+				g := strings.TrimPrefix(s, "glob:")
+				if !globRe.MatchString(g) || strings.HasPrefix(g, "-") || strings.Contains(g, "..") {
+					return nil, errors.New("invalid branch glob: " + g)
+				}
+				revs = append(revs, "--glob="+g)
+			case strings.HasPrefix(s, "refs/") && validRef(s):
+				revs = append(revs, s)
+			default:
+				return nil, errors.New("invalid branch selector: " + s)
+			}
+		}
+	}
+
+	stashByHash := map[string]string{}
+	hide := map[string]bool{}
+	if o.ShowStashes {
+		for _, st := range loadStashes(repo) {
+			stashByHash[st.Hash] = st.Selector
+			revs = append(revs, st.Hash)
+		}
+	}
+
+	res := &GraphResult{Rows: []GraphRow{}, Head: headHash}
+	if b, _, err := runGit(repo, 5*time.Second, 1024, nil, "symbolic-ref", "-q", "--short", "HEAD"); err == nil {
+		res.Branch = strings.TrimSpace(string(b))
+	}
+	changes := countChanges(repo)
+	res.Dirty = changes > 0
+
+	if len(revs) == 0 {
+		return res, nil
+	}
+	args := []string{"log", "--decorate=full", "--no-color", flag, "-n", strconv.Itoa(o.Limit + 1),
+		"--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%ct%x1f%D%x1f%s"}
+	if o.FirstParent {
+		args = append(args, "--first-parent")
+	}
+	args = append(args, revs...)
+	args = append(args, "--")
+	out, se, err := runGit(repo, 60*time.Second, 64<<20, nil, args...)
+	if err != nil {
+		if strings.Contains(se, "does not have any commits") || strings.Contains(se, "bad default revision") {
+			return res, nil
+		}
+		return nil, gitErr(se, err, nil)
+	}
+
+	var rows []GraphRow
+	for _, ln := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
+		f := strings.SplitN(ln, "\x1f", 8)
+		if len(f) < 8 {
+			continue
+		}
+		r := GraphRow{Hash: f[0], Author: f[2], Email: f[3], Subject: f[7]}
+		if f[1] != "" {
+			r.Parents = strings.Fields(f[1])
+		}
+		r.Time, _ = strconv.ParseInt(f[4], 10, 64)
+		r.CTime, _ = strconv.ParseInt(f[5], 10, 64)
+		if sel, isStash := stashByHash[r.Hash]; isStash {
+			r.Stash = sel
+			r.RefInfo = []GRef{{Name: sel, Type: "stash"}}
+			r.Refs = []string{sel}
+			for _, p := range r.Parents[min(1, len(r.Parents)):] {
+				hide[p] = true // index / untracked helper commits of a stash are not real history
+			}
+			if len(r.Parents) > 1 {
+				r.Parents = r.Parents[:1]
+			}
+		} else {
+			r.RefInfo, r.Refs = parseDecorations(f[6], o)
+		}
+		if o.FirstParent && len(r.Parents) > 1 {
+			r.Parents = r.Parents[:1]
+		}
+		rows = append(rows, r)
+	}
+	kept := rows[:0]
+	for _, r := range rows {
+		if !hide[r.Hash] {
+			kept = append(kept, r)
+		}
+	}
+	rows = kept
+	if len(rows) > o.Limit {
+		rows, res.Truncate = rows[:o.Limit], true
+	}
+
+	if o.InHead && headHash != "" {
+		if b, _, err := runGit(repo, 60*time.Second, 16<<20, nil, "rev-list", "--max-count=200000", "HEAD"); err == nil {
+			anc := map[string]bool{}
+			for _, h := range strings.Fields(string(b)) {
+				anc[h] = true
+			}
+			for i := range rows {
+				rows[i].InHead = anc[rows[i].Hash]
+			}
+		}
+	}
+
+	if o.ShowUncommitted && changes > 0 && headHash != "" {
+		for _, r := range rows {
+			if r.Hash == headHash {
+				top := GraphRow{Hash: "*", Parents: []string{headHash}, Author: "*", Subject: "Uncommitted Changes",
+					Time: time.Now().Unix(), CTime: time.Now().Unix(), Changes: changes, InHead: true}
+				rows = append([]GraphRow{top}, rows...)
+				break
+			}
+		}
+	}
+
+	res.Lanes = layoutLanes(rows)
+	res.Rows = rows
+	return res, nil
+}
+
+// layoutLanes assigns each commit a column and the edges to draw. Returns the max lane count.
+func layoutLanes(rows []GraphRow) int {
 	var lanes []string
 	firstEmpty := func() int {
 		for i, h := range lanes {
@@ -80,22 +273,9 @@ func gitGraph(repo string, limit int) (*GraphResult, error) {
 		lanes = append(lanes, "")
 		return len(lanes) - 1
 	}
-	maxLanes := 0
-	for _, ln := range lines {
-		f := strings.Split(ln, "\x1f")
-		if len(f) < 6 {
-			continue
-		}
-		row := GraphRow{Hash: f[0], Author: f[2], Subject: f[5]}
-		if f[1] != "" {
-			row.Parents = strings.Fields(f[1])
-		}
-		row.Time, _ = strconv.ParseInt(f[3], 10, 64)
-		if f[4] != "" {
-			for _, r := range strings.Split(f[4], ", ") {
-				row.Refs = append(row.Refs, strings.TrimSpace(r))
-			}
-		}
+	maxLanes := 1
+	for ri := range rows {
+		row := &rows[ri]
 		col := -1
 		for i, h := range lanes {
 			switch {
@@ -139,23 +319,20 @@ func gitGraph(repo string, limit int) (*GraphResult, error) {
 		for len(lanes) > 0 && lanes[len(lanes)-1] == "" {
 			lanes = lanes[:len(lanes)-1]
 		}
-		res.Rows = append(res.Rows, row)
 	}
-	res.Lanes = maxLanes
-	if b, err := git(repo, 5*time.Second, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
-		res.Branch = strings.TrimSpace(string(b))
-	}
-	if b, err := git(repo, 10*time.Second, "status", "--porcelain"); err == nil {
-		res.Dirty = len(bytes.TrimSpace(b)) > 0
-	}
-	return res, nil
+	return maxLanes
 }
 
+// gitCommit returns `git show --stat` text (legacy route and MCP tool).
 func gitCommit(repo, hash string) (string, error) {
 	if !hashRe.MatchString(hash) {
 		return "", errors.New("invalid commit hash")
 	}
-	out, err := git(repo, 20*time.Second, "show", "--stat", "--format=fuller", "--no-color", hash)
+	r, err := cleanRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	out, err := git(r, 20*time.Second, "show", "--stat", "--format=fuller", "--no-color", "--no-ext-diff", hash)
 	if err != nil {
 		return "", err
 	}
@@ -165,11 +342,16 @@ func gitCommit(repo, hash string) (string, error) {
 	return string(out), nil
 }
 
+// gitDiff returns the full patch of a commit (legacy route and MCP tool).
 func gitDiff(repo, hash string) (string, error) {
 	if !hashRe.MatchString(hash) {
 		return "", errors.New("invalid commit hash")
 	}
-	out, err := git(repo, 30*time.Second, "show", "--format=", "--no-color", "-p", hash)
+	r, err := cleanRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	out, err := git(r, 30*time.Second, "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv", "-p", hash)
 	if err != nil {
 		return "", err
 	}

@@ -5,7 +5,7 @@ A tiny, single-binary developer dashboard. Go backend, no-build web UI, **~10-15
 | Feature | What you get |
 |---|---|
 | **Ports & processes** | Listening TCP ports with owning process, process list by memory, kill / kill tree |
-| **Git graph** | Lane-based commit graph of all branches (like the VS Code graph extensions), click a commit for stat and patch |
+| **Git graph** | A browser take on the vscode-git-graph feature set: branches, tags, stashes, uncommitted changes, right-click actions (checkout, merge, rebase, cherry-pick, revert, reset, push, pull, tag, stash…), commit details with file tree and diffs, compare two commits, find, branch filter, remotes settings, keyboard shortcuts |
 | **Redis browser** | Read-only: SCAN with pattern, type and TTL, view string / list / set / zset / hash / stream |
 | **Terminal** | Local ConPTY shell (Windows) and SSH sessions in xterm.js tabs, optionally auto-running `claude` |
 | **Claude Code** | MCP server (`devdeck mcp`), hook-based live session status, embedded `claude` terminals |
@@ -51,6 +51,10 @@ devdeck can kill processes and open shells, so it is locked down:
 ## Status and limits
 
 Early (v0.1). Known gaps: local terminal is Windows-only for now (SSH terminals work everywhere), no ssh-agent support, no Redis write operations by design, `~/.ssh/config` is not parsed.
+
+Git tab, not implemented: author avatars (would send emails to a third party), GPG signature status, interactive rebase, reflog-only commits, config export. Issue-link, pull-request and branch-pattern settings are stored in the browser, not on disk.
+
+The **Quit** button in the header stops the server. SSH hosts can be added, edited and removed under Terminal → Manage hosts.
 
 ## License
 

@@ -258,6 +258,8 @@ func runServe(args []string) {
 		}
 		writeJSON(w, map[string]any{"rss": rss, "version": version, "os": runtime.GOOS})
 	})
+	registerGitRoutes(mux)
+	mux.HandleFunc("POST /api/quit", handleQuit)
 	mux.HandleFunc("/ws/term", handleTermWS)
 
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
