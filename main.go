@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-const version = "0.1.0"
+// version is overridden at release time: go build -ldflags "-X main.version=v0.2.0"
+var version = "0.2.0-dev"
 
 const usage = `devdeck - tiny dev dashboard
 

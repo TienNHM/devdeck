@@ -33,6 +33,17 @@ function applyI18n(root = document) {
   root.querySelectorAll('[data-i18n-ph]').forEach(el => { el.dataset.enPh ??= el.placeholder; el.placeholder = t(el.dataset.i18nPh, el.dataset.enPh); });
   root.querySelectorAll('[data-i18n-title]').forEach(el => { el.dataset.enTitle ??= el.title; el.title = t(el.dataset.i18nTitle, el.dataset.enTitle); });
 }
+registerStrings('vi', {
+  'palette.placeholder': 'Tìm hoặc chạy lệnh…', 'palette.none': 'Không có lệnh phù hợp', 'palette.goto': 'Mở tab', 'palette.tab': 'Tab',
+  'palette.theme': 'Đổi giao diện sáng / tối', 'palette.lang': 'Đổi ngôn ngữ (English / Tiếng Việt)', 'palette.sidebar': 'Thu gọn / mở thanh bên',
+  'palette.quit': 'Thoát devdeck', 'quit': 'Thoát', 'cancel': 'Huỷ',
+  'nav.system': 'Hệ thống', 'nav.code': 'Mã nguồn', 'nav.data': 'Dữ liệu', 'nav.ops': 'Vận hành', 'nav.remote': 'Từ xa', 'nav.ai': 'AI',
+  'tab.ports': 'Cổng', 'tab.procs': 'Tiến trình', 'tab.projects': 'Dự án', 'tab.git': 'Git', 'tab.redis': 'Redis', 'tab.db': 'Cơ sở dữ liệu',
+  'tab.docker': 'Docker', 'tab.logs': 'Log', 'tab.term': 'Terminal', 'tab.ssh': 'SSH', 'tab.claude': 'Claude',
+  'quit.title': 'Thoát devdeck?', 'quit.terms': '{n} terminal đang mở sẽ bị đóng.',
+  'quit.text': 'Server sẽ dừng, và hook của Claude bị bỏ qua cho tới khi bạn chạy lại devdeck.',
+  'quit.done': 'devdeck đã dừng', 'quit.again': 'Chạy lại bằng devdeck.exe --open, rồi đóng tab này.',
+});
 document.documentElement.lang = LANG;
 $('#lang').onclick = () => { store.set('lang', LANG === 'vi' ? 'en' : 'vi'); location.reload(); };
 $('#lang').title = LANG === 'vi' ? 'Switch to English' : 'Chuyển sang tiếng Việt';
@@ -125,7 +136,7 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
 });
 document.querySelectorAll('#tabs [data-tab]').forEach(b => registerCommand({
-  title: `${t('palette.goto', 'Go to')} ${b.textContent.trim()}`, keywords: b.dataset.tab, hint: t('palette.tab', 'Tab'), run: () => show(b.dataset.tab),
+  title: `${t('palette.goto', 'Go to')} ${t('tab.' + b.dataset.tab, b.textContent.trim())}`, keywords: b.dataset.tab, hint: t('palette.tab', 'Tab'), run: () => show(b.dataset.tab),
 }));
 registerCommand({ title: t('palette.theme', 'Toggle light / dark theme'), keywords: 'theme dark light', run: () => $('#theme').click() });
 registerCommand({ title: t('palette.lang', 'Switch language (English / Tiếng Việt)'), keywords: 'language vietnamese english ngon ngu', run: () => $('#lang').click() });

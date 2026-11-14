@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "description": "Tiny single-binary developer dashboard: ports, processes, git graph, Redis, databases, Docker, logs, SSH and Claude Code integration.",
+    "homepage": "https://github.com/TienNHM/devdeck",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/TienNHM/devdeck/releases/download/v0.2.0/devdeck_v0.2.0_windows_amd64.zip",
+            "hash": "",
+            "extract_dir": "devdeck_v0.2.0_windows_amd64"
+        },
+        "arm64": {
+            "url": "https://github.com/TienNHM/devdeck/releases/download/v0.2.0/devdeck_v0.2.0_windows_arm64.zip",
+            "hash": "",
+            "extract_dir": "devdeck_v0.2.0_windows_arm64"
+        }
+    },
+    "bin": "devdeck.exe",
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/TienNHM/devdeck/releases/download/v$version/devdeck_v$version_windows_amd64.zip",
+                "extract_dir": "devdeck_v$version_windows_amd64"
+            },
+            "arm64": {
+                "url": "https://github.com/TienNHM/devdeck/releases/download/v$version/devdeck_v$version_windows_arm64.zip",
+                "extract_dir": "devdeck_v$version_windows_arm64"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/checksums.txt"
+        }
+    }
+}
