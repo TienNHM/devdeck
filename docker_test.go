@@ -328,7 +328,7 @@ func TestDockerFake(t *testing.T) {
 		if j == "rm -f old" {
 			sawRm = true
 		}
-		if strings.HasSuffix(j, "up -d") && samePath(filepath.Clean(c.Dir), filepath.Clean(dir)) {
+		if strings.HasSuffix(j, "up -d") && samePath(realPath(c.Dir), realPath(dir)) {
 			sawUpDir = true
 		}
 	}
@@ -502,4 +502,12 @@ func TestDockerMCPTools(t *testing.T) {
 	if _, err := cl.handler(map[string]any{"name": "--rm"}); err == nil {
 		t.Error("container_logs accepted a flag as name")
 	}
+}
+
+// realPath resolves symlinks so /var and /private/var (macOS temp dirs) compare equal.
+func realPath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return filepath.Clean(r)
+	}
+	return filepath.Clean(p)
 }

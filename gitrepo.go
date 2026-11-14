@@ -144,7 +144,12 @@ func validRelPath(p string) bool {
 	if p == "" || strings.ContainsRune(p, 0) || filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") || len(p) > 4096 {
 		return false
 	}
-	for _, seg := range strings.Split(filepath.ToSlash(p), "/") {
+	// Same rules on every OS: no drive letters, and both separators count, so a path that is
+	// absolute or escapes the repo on Windows is also rejected when devdeck runs elsewhere.
+	if len(p) >= 2 && p[1] == ':' {
+		return false
+	}
+	for _, seg := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
 		if seg == ".." {
 			return false
 		}
