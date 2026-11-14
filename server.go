@@ -176,7 +176,9 @@ func runServe(args []string) {
 		writeJSON(w, map[string]string{"id": id, "version": ver})
 	})
 	mux.HandleFunc("POST /api/redis/close", func(w http.ResponseWriter, r *http.Request) {
-		var b struct{ ID string `json:"id"` }
+		var b struct {
+			ID string `json:"id"`
+		}
 		_ = decode(r, &b)
 		rconns.close(b.ID)
 		writeJSON(w, map[string]bool{"ok": true})
