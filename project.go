@@ -74,12 +74,7 @@ func exampleProjectPath() string {
 	return "/home/you/code/my-app"
 }
 
-func samePath(a, b string) bool {
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
-}
+// samePath (case-insensitive on Windows/macOS) is defined in logs.go.
 
 // pathInside reports whether child is dir or somewhere below it.
 func pathInside(child, dir string) bool {
