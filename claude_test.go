@@ -9,10 +9,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // The real `claude` binary is never run in tests: DEVDECK_CLAUDE_BIN points at this test binary,
@@ -31,6 +35,17 @@ func fakeClaude() {
 	fmt.Printf("ARGS:%s\n", strings.Join(os.Args[1:], " "))
 	wd, _ := os.Getwd()
 	fmt.Printf("CWD:%s\n", wd)
+	if os.Getenv("FAKE_MODE") == "tree" { // a shim that starts the real worker as a child
+		exe, _ := os.Executable()
+		child := exec.Command(exe)
+		child.Env = append(os.Environ(), "FAKE_MODE=slow")
+		child.Stdout = os.Stdout
+		if child.Start() == nil {
+			fmt.Printf("CHILD:%d\n", child.Process.Pid)
+			_ = child.Wait()
+		}
+		return
+	}
 	if os.Getenv("FAKE_MODE") == "slow" {
 		fmt.Println("started")
 		time.Sleep(60 * time.Second)
@@ -375,6 +390,37 @@ func TestClaudeAskCancel(t *testing.T) {
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("cancel took %s", d)
 	}
+}
+
+func TestClaudeAskKillsTree(t *testing.T) {
+	useFakeClaude(t)
+	t.Setenv("FAKE_MODE", "tree")
+	srv := testServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resp, err := postAsk(ctx, srv.URL, map[string]string{"prompt": "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := bufio.NewScanner(resp.Body)
+	got := ""
+	for !strings.Contains(got, "started") && sc.Scan() {
+		var l askLine
+		_ = json.Unmarshal(sc.Bytes(), &l)
+		got += l.T
+	}
+	i := strings.Index(got, "CHILD:")
+	if i < 0 {
+		t.Fatalf("no child pid in %q", got)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(strings.SplitN(got[i+6:], "\n", 2)[0]))
+	if pid <= 0 {
+		t.Fatalf("bad child pid in %q", got)
+	}
+	cancel()
+	resp.Body.Close()
+	waitFor(t, func() bool { return len(askSlots) == 0 })
+	waitFor(t, func() bool { ok, _ := process.PidExists(int32(pid)); return !ok })
 }
 
 func waitFor(t *testing.T, f func() bool) {

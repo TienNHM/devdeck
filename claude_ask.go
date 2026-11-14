@@ -139,7 +139,7 @@ func handleClaudeAsk(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = killProcess(int32(cmd.Process.Pid), true)
+			killTree(int32(cmd.Process.Pid))
 			_ = cmd.Process.Kill()
 			// a surviving grandchild could keep the pipe open: unblock the reader after a grace period
 			select {
