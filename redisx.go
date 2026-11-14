@@ -15,27 +15,76 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Redis access is strictly read-only: only SCAN, TYPE, TTL and read commands are issued.
+// Redis access is read-only unless a connection was opened with write mode (see redis_write.go):
+// read paths only issue SCAN, TYPE, TTL and read commands.
 
 type redisConnReq struct {
 	Addr     string `json:"addr"`
+	Username string `json:"username,omitempty"`
 	Password string `json:"password"`
 	DB       int    `json:"db"`
 	TLS      bool   `json:"tls"`
+	// Write is never taken from the legacy /api/redis/connect body; only /api/redis/open sets it.
+	Write bool `json:"-"`
+}
+
+const (
+	redisIdleClose   = 5 * time.Minute // close sockets after this much inactivity (re-dialled lazily)
+	redisSessionTTL  = 12 * time.Hour  // forget the session (and its in-memory password) after this
+	maxRedisSessions = 16
+)
+
+// rconn is one browser connection. The password lives only here, in memory.
+type rconn struct {
+	opt   redisConnReq
+	write bool
+	ver   string
+	mu    sync.Mutex
+	c     *redis.Client
+	idle  *time.Timer
+	used  time.Time
+}
+
+func (s *rconn) client() *redis.Client {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.c == nil {
+		s.c = newRedisClient(s.opt)
+	}
+	s.used = time.Now()
+	s.idle.Reset(redisIdleClose)
+	return s.c
+}
+
+func (s *rconn) closeIdle() {
+	s.mu.Lock()
+	c := s.c
+	s.c = nil
+	s.mu.Unlock()
+	if c != nil {
+		_ = c.Close()
+	}
+}
+
+func (s *rconn) shutdown() {
+	s.idle.Stop()
+	s.closeIdle()
 }
 
 type redisConns struct {
 	mu sync.Mutex
-	m  map[string]*redis.Client
+	m  map[string]*rconn
 }
 
-var rconns = &redisConns{m: map[string]*redis.Client{}}
+var rconns = &redisConns{m: map[string]*rconn{}}
+
+var errRedisReadOnly = errors.New("this connection is read-only; reconnect with write mode enabled to change data")
 
 func newRedisClient(r redisConnReq) *redis.Client {
 	opt := &redis.Options{
-		Addr: r.Addr, Password: r.Password, DB: r.DB,
-		DialTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second,
-		PoolSize: 2, MinIdleConns: 0,
+		Addr: r.Addr, Username: r.Username, Password: r.Password, DB: r.DB,
+		DialTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second,
+		PoolSize: 2, MinIdleConns: 0, ConnMaxIdleTime: redisIdleClose,
 	}
 	if r.TLS {
 		opt.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
@@ -46,6 +95,9 @@ func newRedisClient(r redisConnReq) *redis.Client {
 func (rc *redisConns) connect(r redisConnReq) (string, string, error) {
 	if r.Addr == "" {
 		r.Addr = "127.0.0.1:6379"
+	}
+	if r.DB < 0 || r.DB > 1024 {
+		return "", "", errors.New("database index out of range")
 	}
 	cl := newRedisClient(r)
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
@@ -64,29 +116,83 @@ func (rc *redisConns) connect(r redisConnReq) (string, string, error) {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	id := hex.EncodeToString(b)
+	s := &rconn{opt: r, write: r.Write, ver: ver, c: cl, used: time.Now()}
+	s.idle = time.AfterFunc(redisIdleClose, s.closeIdle)
 	rc.mu.Lock()
-	rc.m[id] = cl
+	rc.sweepLocked()
+	rc.m[id] = s
 	rc.mu.Unlock()
 	return id, ver, nil
 }
 
-func (rc *redisConns) get(id string) (*redis.Client, error) {
+// sweepLocked drops expired sessions and, if still full, the least recently used one. No background goroutine.
+func (rc *redisConns) sweepLocked() {
+	var oldest string
+	var oldestT time.Time
+	for id, s := range rc.m {
+		s.mu.Lock()
+		used := s.used
+		s.mu.Unlock()
+		if time.Since(used) > redisSessionTTL {
+			delete(rc.m, id)
+			s.shutdown()
+			continue
+		}
+		if oldest == "" || used.Before(oldestT) {
+			oldest, oldestT = id, used
+		}
+	}
+	if len(rc.m) >= maxRedisSessions && oldest != "" {
+		rc.m[oldest].shutdown()
+		delete(rc.m, oldest)
+	}
+}
+
+func (rc *redisConns) session(id string) (*rconn, error) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	c := rc.m[id]
-	if c == nil {
+	s := rc.m[id]
+	if s == nil {
 		return nil, errors.New("unknown redis connection; connect again")
 	}
-	return c, nil
+	s.mu.Lock()
+	expired := time.Since(s.used) > redisSessionTTL
+	s.mu.Unlock()
+	if expired {
+		delete(rc.m, id)
+		s.shutdown()
+		return nil, errors.New("redis connection expired; connect again")
+	}
+	return s, nil
+}
+
+func (rc *redisConns) get(id string) (*redis.Client, error) {
+	s, err := rc.session(id)
+	if err != nil {
+		return nil, err
+	}
+	return s.client(), nil
+}
+
+// getW returns the client only for connections opened in write mode.
+func (rc *redisConns) getW(id string) (*redis.Client, error) {
+	s, err := rc.session(id)
+	if err != nil {
+		return nil, err
+	}
+	if !s.write {
+		return nil, errRedisReadOnly
+	}
+	return s.client(), nil
 }
 
 func (rc *redisConns) close(id string) {
 	rc.mu.Lock()
-	c := rc.m[id]
+	s := rc.m[id]
 	delete(rc.m, id)
 	rc.mu.Unlock()
-	if c != nil {
-		_ = c.Close()
+	if s != nil {
+		s.shutdown()
 	}
 }
 

@@ -1,1 +1,71 @@
 /* db tab styles (feature module). */
+.db-host{width:150px}.db-port{width:74px}.db-user{width:120px}.db-dbname{width:130px}.db-pass{width:180px}.db-path{width:360px;flex:1;min-width:220px;max-width:560px}
+#db-status{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pill.db-ropill{background:var(--surface2);color:var(--mut);border:1px solid var(--line);line-height:17px}
+.db-empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r)}
+.db-main{flex:1;min-height:0;display:flex;gap:12px}
+
+/* side: schema + tables */
+.db-side{width:250px;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+.db-side-head{display:flex;flex-direction:column;gap:6px;padding:10px;border-bottom:1px solid var(--line)}
+.db-side-head select,.db-side-head .search,.db-side-head .search input{width:100%;min-width:0}
+.db-tables{flex:1;overflow:auto;padding:4px 0}
+.db-t{display:flex;align-items:center;gap:8px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.db-t:hover{background:var(--surface2)}.db-t.on{background:var(--acc-soft)}
+.db-ti{font-size:10px;font-weight:700;width:18px;height:18px;display:grid;place-items:center;border-radius:5px;background:var(--acc-soft);color:var(--acc);flex-shrink:0}
+.db-ti.v{background:var(--warn-soft);color:var(--warn)}
+.db-tn{flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.db-tr{font-size:11px;color:var(--mut)}
+
+/* work area */
+.db-work{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;min-height:0}
+.db-seg{display:flex;align-items:center;gap:2px;flex-shrink:0}
+.db-seg button{border:1px solid transparent;background:none;color:var(--mut);font:inherit;font-weight:500;padding:5px 14px;border-radius:9px;cursor:pointer}
+.db-seg button:hover{color:var(--fg);background:var(--surface2)}
+.db-seg button.on{background:var(--surface);color:var(--fg);border-color:var(--line);box-shadow:var(--shadow)}
+.db-cur{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50%}
+.db-pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.db-pane.scroll{overflow:auto;display:block}
+.db-dtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line)}
+.db-dtools select{padding:3px 8px;font-size:12px}
+.db-dtools .btn .i{width:14px;height:14px}
+.db-fval{width:160px;padding:3px 8px;font-size:12px}
+.db-gridwrap{flex:1;min-height:0;overflow:auto}
+.db-err{margin:12px;padding:10px 12px;border-radius:9px;background:var(--bad-soft);color:var(--bad);white-space:pre-wrap;font:12px/1.5 "Cascadia Code",ui-monospace,Consolas,monospace}
+
+/* grid */
+.db-grid{width:max-content;min-width:100%}
+.db-grid th{padding:6px 12px;text-transform:none;letter-spacing:0;font-size:12px;color:var(--fg);white-space:nowrap;background:var(--surface2)}
+.db-grid th.db-sortable{cursor:pointer}.db-grid th.db-sortable:hover{color:var(--acc)}
+.db-grid td{padding:4px 12px;max-width:320px;overflow:hidden;text-overflow:ellipsis;font:12px/1.5 "Cascadia Code",ui-monospace,Consolas,monospace;cursor:default}
+.db-grid td[data-c]{cursor:pointer}
+.db-grid td.sel{outline:2px solid var(--acc);outline-offset:-2px;background:var(--acc-soft)}
+.db-grid .db-rn{color:var(--mut);text-align:right;width:1%;user-select:none;position:sticky;left:0;background:var(--surface)}
+.db-grid th.db-rn{z-index:2;background:var(--surface2)}
+.db-num{text-align:right;font-variant-numeric:tabular-nums}
+.db-null{color:var(--mut);font-style:italic;font-size:11px;opacity:.8}
+
+/* structure */
+.db-stbl td{padding:6px 14px}
+.db-def{max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.db-ihead{border-top:1px solid var(--line)}
+
+/* SQL editor */
+.db-sqlpane{gap:10px}
+.db-editor{display:flex;flex-direction:column;flex-shrink:0}
+.db-editor textarea{width:100%;height:150px;min-height:80px;resize:vertical;border:0;border-bottom:1px solid var(--line);border-radius:var(--r) var(--r) 0 0;padding:10px 12px;background:var(--surface);color:var(--fg);font:12.5px/1.55 "Cascadia Code",ui-monospace,Consolas,monospace;outline:none;tab-size:2}
+.db-etools{display:flex;align-items:center;gap:8px;padding:6px 10px;flex-wrap:wrap}
+.db-etools .btn .i{width:13px;height:13px}
+.db-note{font-size:11.5px}
+.db-qres{flex:1;min-height:0;overflow:auto}
+
+/* cell detail */
+.db-cellpane{width:340px;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+.db-cellpane .card-head b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-cellpane .card-head span{display:flex;gap:4px;flex-shrink:0}
+.db-cellv{flex:1;overflow:auto}
+.db-cellv pre{margin:0}
+.db-cellv>.db-null{display:block;padding:12px 14px;font-size:12px}
+
+@media (max-width:1100px){.db-cellpane{position:absolute;right:16px;top:70px;bottom:14px;z-index:5;box-shadow:0 12px 40px rgba(0,0,0,.25)}}
+@media (max-width:900px){.db-main{flex-direction:column}.db-side{width:auto;max-height:35%}.db-path{width:200px}}

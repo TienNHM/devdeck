@@ -1,1 +1,89 @@
-/* redis tab styles (feature module). */
+/* redis tab styles (feature module). Old #r-* rules in style.css no longer match anything here. */
+.rd-addr{width:180px}.rd-db{width:66px}.rd-user{width:150px}.rd-pass{width:190px}
+.rd-wcheck{color:var(--warn)}
+.pill.rd-wpill{background:var(--bad);color:#fff}
+.pill.rd-ropill{background:var(--surface2);color:var(--mut);border:1px solid var(--line);line-height:17px}
+#rd-status{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rd-empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r)}
+.rd-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+
+/* segmented control */
+.rd-seg{display:inline-flex;gap:2px;padding:2px;background:var(--surface2);border:1px solid var(--line);border-radius:9px;align-self:flex-start;flex-shrink:0}
+.rd-seg button{border:0;background:none;color:var(--mut);font:inherit;font-weight:500;padding:4px 12px;border-radius:7px;cursor:pointer}
+.rd-seg button:hover{color:var(--fg)}
+.rd-seg button.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.rd-seg.sm button{padding:2px 9px;font-size:12px}
+
+/* keys view */
+.rd-main{flex:1;min-height:0;display:flex;gap:12px}
+.rd-left{width:38%;max-width:520px;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+.rd-ltools{display:flex;gap:6px;align-items:center;padding:10px 10px 6px;flex-wrap:wrap}
+.rd-ltools .search{flex:1;min-width:0}.rd-ltools .search input{min-width:0;width:100%}
+.rd-wbar{display:flex;align-items:center;gap:6px;padding:4px 10px 6px;border-bottom:1px solid var(--line)}
+.rd-keys{flex:1;overflow:auto;padding:4px 0}
+.rd-lfoot{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);font-size:12px}
+.rd-row{display:flex;align-items:center;gap:7px;padding:3px 10px 3px calc(10px + var(--d,0) * 16px);cursor:pointer;white-space:nowrap;min-height:26px}
+.rd-row:hover{background:var(--surface2)}
+.rd-leaf.on{background:var(--acc-soft)}
+.rd-kn{flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rd-ttl{color:var(--mut);font-size:11px}
+.rd-ck{margin:0;flex-shrink:0}
+.rd-caret{width:12px;flex-shrink:0;color:var(--mut)}
+.rd-caret:before{content:"▸";font-size:11px}
+.rd-folder.open .rd-caret:before{content:"▾"}
+.rd-fname{flex:1;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.rd-n{font-size:11px;color:var(--mut);background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:0 7px}
+.rd-fdel{border:0;background:none;color:var(--mut);padding:2px;cursor:pointer;display:grid;place-items:center;border-radius:6px;opacity:0}
+.rd-folder:hover .rd-fdel{opacity:1}.rd-fdel:hover{color:var(--bad);background:var(--bad-soft)}
+.rd-fdel .i{width:14px;height:14px}
+.rd-note{padding:4px 10px 4px calc(28px + var(--d,0) * 16px);color:var(--mut);font-size:12px}
+
+/* key detail */
+.rd-right{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.rd-dhead{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.rd-dkey{font-size:13px;font-weight:600;word-break:break-all;user-select:all}
+.rd-dmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--mut);font-size:12px}
+.rd-dmeta .btn .i{width:14px;height:14px}
+.rd-dbody{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}
+.rd-vtools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rd-raw{background:var(--surface2);border:1px solid var(--line);border-radius:9px;margin:0;max-height:none}
+.rd-edit{width:100%;min-height:260px;flex:1;resize:vertical;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:10px;outline:none}
+.rd-edit:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.rd-factions{display:flex;gap:8px}
+.rd-tbl td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;padding:5px 12px}
+.rd-tbl td.rd-ccell{width:30%}.rd-tbl td.act{width:90px;max-width:none}
+.rd-tbl td[data-v]{cursor:pointer}
+.rd-tbl th{padding:7px 12px}
+.rd-addrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.rd-addrow .rd-grow{flex:1;min-width:160px}.rd-score{width:100px}
+.rd-sub{border-top:1px dashed var(--line);padding-top:10px}
+.rd-form{display:grid;grid-template-columns:1fr 160px;gap:10px}
+.rd-form label{display:flex;flex-direction:column;gap:4px;color:var(--mut);font-size:12px;font-weight:600}
+.rd-form .rd-span{grid-column:1/-1}
+.rd-form textarea{font:12px/1.5 "Cascadia Code",ui-monospace,Consolas,monospace;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px;resize:vertical}
+
+/* JSON viewer */
+.rd-json{background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;overflow:auto;line-height:1.55}
+.rd-jl{padding-left:14px;position:relative;white-space:pre-wrap;word-break:break-word}
+.rd-jc{margin-left:5px;padding-left:12px;border-left:1px dashed var(--line)}
+.rd-jt{position:absolute;left:0;top:0;cursor:pointer;color:var(--mut);width:14px;user-select:none}
+.rd-jt:before{content:"▾";font-size:11px}
+.rd-jn.closed>.rd-jl>.rd-jt:before{content:"▸"}
+.rd-jsum{display:none;color:var(--mut);cursor:pointer;font-style:italic}
+.rd-jn.closed>.rd-jc,.rd-jn.closed>.rd-jend{display:none}
+.rd-jn.closed>.rd-jl>.rd-jsum{display:inline}
+.rd-jk{color:#7c3aed}.rd-js{color:#0f766e}.rd-jnum{color:#c2410c}.rd-jbool{color:#2563eb}.rd-jnull{color:var(--mut);font-style:italic}.rd-jp{color:var(--mut)}
+:root[data-theme=dark] .rd-jk{color:#c4b5fd}:root[data-theme=dark] .rd-js{color:#5eead4}:root[data-theme=dark] .rd-jnum{color:#fdba74}:root[data-theme=dark] .rd-jbool{color:#93c5fd}
+
+/* server info */
+.rd-infoview{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.rd-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.rd-stat{padding:12px 14px}
+.rd-sv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rd-small{font-size:11.5px}
+.rd-bar{height:5px;border-radius:3px;background:var(--surface2);margin:6px 0 4px;overflow:hidden}
+.rd-bar i{display:block;height:100%;background:var(--ok)}
+.rd-rawinfo summary{padding:10px 14px;cursor:pointer;font-weight:600}
+.rd-rawinfo pre{max-height:360px;border-top:1px solid var(--line)}
+
+@media (max-width:900px){.rd-main{flex-direction:column}.rd-left{width:auto;max-width:none;max-height:45%}.rd-addr,.rd-user,.rd-pass{width:140px}}
