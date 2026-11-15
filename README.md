@@ -23,6 +23,8 @@ devdeck listens on `127.0.0.1` only and talks to Claude Code through MCP and hoo
 
 ## Install
 
+Step-by-step guide for Windows, macOS and Linux (first run, Claude Code setup, autostart, update, uninstall, troubleshooting): **[docs/INSTALL.md](docs/INSTALL.md)** · **[Tiếng Việt](docs/INSTALL.vi.md)**
+
 ### Download
 Grab the archive for your OS from the [Releases](https://github.com/TienNHM/devdeck/releases) page, unpack it and run `devdeck` (or `devdeck.exe`).
 
